@@ -34,7 +34,8 @@ Source: [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
 ```bash
 git clone https://github.com/saeidtaleghani23/Attention_From_Scratch.git
 cd Attention_From_Scratch
-pip install -r requirements.txt
+conda env create -f ./env/environment.yml
+conda activate transformer_env
 python train.py --dataset your_dataset
 
 ```
