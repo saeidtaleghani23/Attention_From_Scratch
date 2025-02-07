@@ -26,8 +26,8 @@ This project walks you through creating a basic Attention-based model from scrat
 2. Train your own Attention-based model on any text dataset!  
 
 ```bash
-git clone https://github.com/saeidtaleghani23/SimpleAttention.git
-cd SimpleAttention
+git clone https://github.com/saeidtaleghani23/Attention_From_Scratch.git
+cd Attention_From_Scratch
 pip install -r requirements.txt
 python train.py --dataset your_dataset
 
