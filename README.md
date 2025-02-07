@@ -13,7 +13,13 @@ This project walks you through creating a basic Attention-based model from scrat
 - **Customizable Architecture:** Adjust the number of layers and attention heads to experiment with the model’s complexity.
 
 ---
+## 🖼️ Transformer Architecture Diagram
 
+![Transformer Diagram](Transformer_Diagram.png)
+
+SOurce: [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+
+---
 ## 📚 What’s Inside  
 - **Core Attention Module:** The building block of the Transformer.  
 - **Simple and Clean Code:** Written with beginners in mind, using clear and well-commented code.  
