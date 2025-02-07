@@ -17,7 +17,7 @@ This project walks you through creating a basic Attention-based model from scrat
 
 ![Transformer Diagram](Transformer_Diagram.png)
 
-SOurce: [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
+Source: [Attention Is All You Need](https://arxiv.org/abs/1706.03762)
 
 ---
 ## 📚 What’s Inside  
