@@ -1,0 +1,18 @@
+name: transformer_env  # Name of the environment
+channels:         # List of channels to search for packages
+  - conda-forge
+  - defaults
+dependencies:   # List of dependencies
+  - pytorch
+  - tensorflow
+  - numpy
+  - pandas
+  - matplotlib
+  - tqdm
+  - tensorboard
+  - huggingface_hub
+  - datasets
+  - pip
+  - pip:     # List of pip packages
+    - transformers
+    - tokenizers
