@@ -355,9 +355,6 @@ class Encoder(nn.Module):
 
 class DecoderBlock(nn.Module):
     def __init__(self,  embed_size: int = 512, heads: int = 8, ff_hidden_size: int = 2048, drop: float = 0.2
-                 # self_attention: MultiHeadAttention,
-                 # cross_attention: MultiHeadAttention,
-                 # feed_forward: FeedForward,
                  ) -> None:
         """
         Class to create the decoder block
@@ -378,11 +375,12 @@ class DecoderBlock(nn.Module):
         self.residual_connection_2 = ResidualConnection(drop)
         self.residual_connection_3 = ResidualConnection(drop)
 
-    def forward(self, encoder_output, source_mask, target_mask):
+    def forward(self, x, encoder_output, source_mask, target_mask):
         """
         Forward pass for the decoder block
 
         Args:
+            x (torch.Tensor): Input tensor.
             encoder_output (torch.Tensor): Output from the encoder.
             source_mask (torch.Tensor): Source mask tensor.
             target_mask (torch.Tensor): Target mask tensor.
