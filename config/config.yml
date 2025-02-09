@@ -1,7 +1,7 @@
-source_vocab_size: 0
-target_vocab_size: 0
-source_sq_len: 0
-target_sqe_len: 0
+source_vocab_size: 5000
+target_vocab_size: 5000
+source_sq_len: 200
+target_sqe_len: 200
 embedding_dim: 512
 num_heads: 8
 num_layers: 6

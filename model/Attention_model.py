@@ -6,14 +6,15 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.tensorboard import SummaryWriter
 # Math
 import math
-import time
+import warnings
+warnings.simplefilter("ignore", category=DeprecationWarning)
 
 # %%
 # Object-Oriented Programming of Attention Model
 
-
+######################################################
 class InputEmbedding(nn.Module):
-    def __init__(self, vocab_size: int = 1000, embed_size: int = 512) -> torch.Tensor:
+    def __init__(self, vocab_size: int = 50000, embed_size: int = 512) -> torch.Tensor:
         """
         Class to create input embedding for the input tokens
         Args:
@@ -21,15 +22,16 @@ class InputEmbedding(nn.Module):
             embed_size (int):dimension of the embeddings. Defaults to 512.
         """
         super(InputEmbedding, self).__init__()
+        self.embed_size = embed_size
         self.embedding = nn.Embedding(
             num_embeddings=vocab_size, embedding_dim=embed_size)
 
     def forward(self, input_token: torch.Tensor) -> torch.Tensor:
         input_embed = self.embedding(
-            input_token) * math.sqrt(self.embedding_dim)
+            input_token) * math.sqrt(self.embed_size)
         return input_embed
 
-
+######################################################
 class PositionEncoding(nn.Module):
     def __init__(self, max_seq_len: int, embedding_dim: int = 512, drop: float = 0.2) -> torch.Tensor:
         """
@@ -74,11 +76,11 @@ class PositionEncoding(nn.Module):
             torch.Tensor: Positional encoded input of the same shape.
         """
         x = input_embed_token + \
-            self.position_encoding[:, :input_embed_token.size(
-                1), :]
+            self.position_encoding[:, :input_embed_token.size(1), :]
+                
         return self.dropout(x)
 
-
+######################################################
 class LayerNormalization(nn.Module):
     def __init__(self, eps: float = 1e-6) -> None:
         """
@@ -314,7 +316,7 @@ class EncoderBlock(nn.Module):
         if return_attention_scores:
             return x, self.attention.get_attention_weights()
         else:
-            return
+            return x
 
 # Encoder class
 
@@ -487,6 +489,7 @@ class Transformer(nn.Module):
             source_pad_idx (int): _description_
             target_pad_idx (int): _description_
         """
+        super().__init__()  # This must be called first!
         self.encoder = encoder
         self.decoder = decoder
         self.encoder_embed = encoder_embed
