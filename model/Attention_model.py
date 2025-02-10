@@ -1,9 +1,9 @@
 # %%
 # import libraries
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
+import torch # type: ignore
+import torch.nn as nn # type: ignore
+from torch.utils.data import Dataset, DataLoader, random_split # type: ignore
+from torch.utils.tensorboard import SummaryWriter # type: ignore
 # Math
 import math
 import warnings
@@ -12,7 +12,6 @@ warnings.simplefilter("ignore", category=DeprecationWarning)
 # %%
 # Object-Oriented Programming of Attention Model
 
-######################################################
 class InputEmbedding(nn.Module):
     def __init__(self, vocab_size: int = 50000, embed_size: int = 512) -> torch.Tensor:
         """
@@ -27,11 +26,19 @@ class InputEmbedding(nn.Module):
             num_embeddings=vocab_size, embedding_dim=embed_size)
 
     def forward(self, input_token: torch.Tensor) -> torch.Tensor:
+        """
+        Converts token IDs of a sentence into embedding vectors
+
+        Args:
+            input_token (torch.Tensor): the size of the input token is (max_seq_len,)
+
+        Returns:
+            torch.Tensor: Embedded tokens. the size of the output is (max_seq_len, embed_size)
+        """
         input_embed = self.embedding(
             input_token) * math.sqrt(self.embed_size)
         return input_embed
 
-######################################################
 class PositionEncoding(nn.Module):
     def __init__(self, max_seq_len: int, embedding_dim: int = 512, drop: float = 0.2) -> torch.Tensor:
         """
@@ -73,14 +80,14 @@ class PositionEncoding(nn.Module):
             input_embed_token (torch.Tensor): Input tensor of shape (batch_size, seq_len, embedding_dim)
 
         Returns:
-            torch.Tensor: Positional encoded input of the same shape.
+            torch.Tensor: Positional encoded input of the same shape. The output shape is (batch_size, seq_len, embedding_dim)
         """
         x = input_embed_token + \
-            self.position_encoding[:, :input_embed_token.size(1), :]
+            (self.position_encoding[:, :input_embed_token.size(1), :]).requires_grad_(False)
                 
         return self.dropout(x)
 
-######################################################
+
 class LayerNormalization(nn.Module):
     def __init__(self, eps: float = 1e-6) -> None:
         """
@@ -101,7 +108,7 @@ class LayerNormalization(nn.Module):
             x (torch.Tensor): Input tensor.
 
         Returns:
-            torch.Tensor: Output tensor.
+            torch.Tensor: Output tensor. IT keeps the shape of the input data
         """
         mean = x.mean(-1, keepdim=True)
         std = x.std(-1, keepdim=True)
@@ -140,21 +147,21 @@ class FeedForward(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, embed_size: int = 512, heads: int = 8, drop: float = 0.2) -> None:
+    def __init__(self, embed_size: int = 512, num_heads: int = 8, drop: float = 0.2) -> None:
         """
         Class to create the multi-head attention mechanism
         Args:
             embed_size (int): dimension of the embeddings. The default is 512.
-            heads (int): Number of attention heads. The default is 8.
+            num_heads (int): Number of attention heads. The default is 8.
             drop (float): Dropout rate. The default is 0.2.
         """
         super(MultiHeadAttention, self).__init__()
         self.embed_size = embed_size
-        self.heads = heads
-        self.head_dim = embed_size // heads
+        self.heads = num_heads
+        self.head_dim = embed_size // num_heads
 
         # Check if embed_size is divisible by heads
-        assert self.head_dim * heads == embed_size, "Embedding size needs to be divisible by heads"
+        assert self.head_dim * num_heads == embed_size, "Embedding size needs to be divisible by heads"
 
         # Query, Key, Value and Output weight matrices
         self.q_linear = nn.Linear(self.embed_size, self.embed_size)
@@ -176,7 +183,7 @@ class MultiHeadAttention(nn.Module):
             query (torch.Tensor): Query tensor.
             key (torch.Tensor): Key tensor.
             value (torch.Tensor): Value tensor.
-            mask (torch.Tensor): Mask tensor. The default is None.
+            mask (torch.Tensor): Mask tensor to mask padded tokens in encoder and future tokens as well as padded tokens in decoder. The default is None.
 
         Returns:
             torch.Tensor: Output tensor.
@@ -213,7 +220,7 @@ class MultiHeadAttention(nn.Module):
         # apply mask if provided
         if mask is not None:
             attention_score = attention_score.masked_fill(
-                mask == 0, float('-1e20'))
+                mask == 0, -1e20)
 
         # Apply softmax to get the attention weights
         # (Batch, heads, seq_len, seq_len)
@@ -301,7 +308,7 @@ class EncoderBlock(nn.Module):
 
         Args:
             x (torch.Tensor): Input tensor.
-            mask (torch.Tensor): Mask tensor.
+            mask (torch.Tensor): Mask teh padding tokens from calculations.
 
         Returns:
             torch.Tensor: Output tensor.

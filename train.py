@@ -6,7 +6,7 @@ import os
 from sklearn.metrics import accuracy_score # type: ignore
 from util import get_dataset, get_weights 
 import numpy as np # type: ignore
-import wandb
+import wandb # type: ignore
 import yaml
 from tqdm import tqdm # type: ignore
 
@@ -156,7 +156,7 @@ def train_model(initial_epoch,
         # -- set the model on train
         model.train()
         # -- Train for one epoch
-        total_train_time += run_epoch(model, optimizer, train_loader,
+        total_train_time += run_epoch_train(model, optimizer, train_loader,
                                       loss_func, device, results,
                                       score_functions, epoch, prefix="train", desc="Training")
 

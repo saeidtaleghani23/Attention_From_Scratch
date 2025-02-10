@@ -1,18 +1,18 @@
 # HuggingFace libraries
-# library for downlaoading datasets
-from datasets import load_dataset
+# library for downloading datasets
+from datasets import load_dataset # type: ignore
 # library for training the tokenizer
-from tokenizers import Tokenizer
-from tokenizers.models import WordLevel
+from tokenizers import Tokenizer # type: ignore
+from tokenizers.models import WordLevel # type: ignore
 # training your tokenizer
-from tokenizers.trainers import WordLevelTrainer
+from tokenizers.trainers import WordLevelTrainer # type: ignore
 # customize how pre-tokenization (e.g., splitting into words) is done
-from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.pre_tokenizers import Whitespace # type: ignore
 
 # torch libraries
-import torch
-import torch.nn as nn
-from torch.utils.data import random_split, Dataset, DataLoader
+import torch # type: ignore
+import torch.nn as nn # type: ignore 
+from torch.utils.data import random_split, Dataset, DataLoader # type: ignore
 # Other libraries
 import os
 from pathlib import Path
@@ -81,13 +81,12 @@ def get_dataset(config):
     if not os.path.exists(cache_dir):  # If the dataset directory does not exists
         os.makedirs(cache_dir)  # Create the dataset directory
 
-    source_lang = config['DATASET']['source_lang']
-    target_lang = config['DATASET']['target_lang']
+    source_lang = config['DATASET']['source_lang'] # such as 'en'
+    target_lang = config['DATASET']['target_lang'] # such as 'fr'
     dataset_name = config['DATASET']['dataset_name']
-    max_seq_len = config['MODEL']['source_sq_len']
+    max_seq_len = config['MODEL']['source_sq_len'] # such as 350
 
     dataset = load_dataset(dataset_name, f'{source_lang}-{target_lang}', split='train', cache_dir = cache_dir)
-    #dataset =   load_dataset('opus_books', 'en-fr', split='train') 
 
     # build tokenizer
     source_tokenizer = build_tokenizer(config, dataset, source_lang)
@@ -128,7 +127,7 @@ class Seq2SeqDataset(Dataset):
         self.target_lang = target_lang
         self.max_seq_len = max_seq_len
 
-        # start of a sentence ID
+        # special tokens IDs
         self.sos_token = torch.tensor([self.source_tokenizer.token_to_id('[SOS]')], dtype=torch.int64)
         self.eos_token = torch.tensor([self.source_tokenizer.token_to_id('[EOS]')], dtype=torch.int64)
         self.pad_token = torch.tensor([self.source_tokenizer.token_to_id('[PAD]')], dtype=torch.int64)
@@ -138,14 +137,17 @@ class Seq2SeqDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, idx):
+        # get the idx'th pair sentences
         source_target_pair = self.dataset[idx]
+        # get source (e.g. English) sentence
         source_text = source_target_pair['translation'][self.source_lang]
+        # get target (e.g. French) sentence
         target_text = source_target_pair['translation'][self.target_lang]
-
+        # Convert each sentence into tokens IDs
         encoder_input_tokens = self.source_tokenizer.encode(source_text).ids
         decoder_input_tokens = self.target_tokenizer.encode(target_text).ids
 
-        # in encoder we add two SOS and EOS token to the encoder tokens
+        # in encoder we add two SOS and EOS token IDs to the encoder tokens and pdd it to max_seq_len
         encoder_padding_tokens = self.max_seq_len - \
             len(encoder_input_tokens) - 2
         # in decoder, we only add SOS token to the decoder tokens
@@ -178,29 +180,30 @@ class Seq2SeqDataset(Dataset):
         assert decoder_input.size(0) == self.max_seq_len
         assert label.size(0) == self.max_seq_len
 
-        # Create encoder mask
+        # Create encoder mask that 1 shows not padded token ids and 0 shows padded token ids
         encoder_mask = (encoder_input != self.pad_token).unsqueeze(
             0).unsqueeze(0).int()  # (1, 1, max_seq_len)
 
-        # Create decoder
-        # Padding mask for the decoder
+        # Create decoder that 1 shows not padded token ids and 0 shows padded token ids
         decoder_padding_mask = (decoder_input != self.pad_token).unsqueeze(
             0).unsqueeze(0).int()  # (1, 1, max_seq_len)
+        
         # Causal mask for the decoder (lower triangular matrix)
-        seq_len = decoder_input.size(0)
+        seq_len = decoder_input.size(0) # max_seq_len
         causal_mask = torch.tril(torch.ones((seq_len, seq_len), diagonal=1)).type(
-            torch.int64)  # (seq_len, seq_len)
+            torch.int64)  # (max_seq_len, max_seq_len)
+        
         causal_mask = causal_mask.unsqueeze(
-            0).unsqueeze(0)  # (1, 1, seq_len, seq_len)
+            0).unsqueeze(0)  # (1, max_seq_len, max_seq_len)
+        
         # Combine padding mask and causal mask for the decoder
-        # (1, 1, seq_len, seq_len)
-        decoder_mask = (causal_mask & decoder_padding_mask.unsqueeze(2))
+        decoder_mask = (causal_mask & decoder_padding_mask) # (1, 1, seq_len, seq_len)
 
         return {
-            "encoder_input": encoder_input,
-            "decoder_input": decoder_input,
-            "encoder_mask": encoder_mask,  # (1, 1, max_seq_len)
-            "decoder_mask": decoder_mask,  # (1, 1, max_seq_len)
+            "encoder_input": encoder_input, # token IDS (max_seq_len,)
+            "decoder_input": decoder_input, # token IDS (max_seq_len,)
+            "encoder_mask": encoder_mask,  # binary mask (1, 1, max_seq_len)
+            "decoder_mask": decoder_mask,  # (1, max_seq_len, max_seq_len)
             "label": label,  # max_seq_len
             "source_text": source_text,
             "target_text": target_text,
