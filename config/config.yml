@@ -26,6 +26,7 @@ BENCHMARK:
   model_folder: 'trained_model/weights'
   preload: None
   experiment_name: 'runs/translation_model'
+  results_path: ./results
 
 
 
