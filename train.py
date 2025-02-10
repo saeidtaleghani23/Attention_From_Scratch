@@ -11,8 +11,73 @@ import yaml
 from tqdm import tqdm # type: ignore
 
 
+def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_len, device):
+    sos_idx = tokenizer_tgt.token_to_id('[SOS]')
+    eos_idx = tokenizer_tgt.token_to_id('[EOS]')
+
+    # Precompute the encoder output and reuse it for every step
+    encoder_output = model.encode(source, source_mask)
+    # Initialize the decoder input with the sos token
+    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
+    while True:
+        if decoder_input.size(1) == max_len:
+            break
+
+        # build mask for target
+        decoder_mask = causal_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+
+        # calculate output
+        out = model.decode(encoder_output, source_mask, decoder_input, decoder_mask)
+
+        # get next token
+        prob = model.project(out[:, -1])
+        _, next_word = torch.max(prob, dim=1)
+        decoder_input = torch.cat(
+            [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
+        )
+
+        if next_word == eos_idx:
+            break
+
+    return decoder_input.squeeze(0)
+
+
+def run_epoch_val(model, optimizer, data_loader, loss_function, device, results, score_functions, epoch):
+    model = model.to(device)
+    running_loss = []
+    model.eval()
+    with torch.no_grad():
+        batch_iterator = tqdm(data_loader, desc= f'Processing epoch {epoch:02d}')
+        for batch in batch_iterator:
+            encoder_input = batch['encoder_input'].to(device) # (Batch, max_Seq_len)
+            decoder_input = batch['decoder_input'].to(device) # (Batch, max_Seq_len)
+            encoder_mask = batch['encoder_mask'].to(device) # (Batch, 1, 1, max_Seq_len)
+            decoder_mask = batch['decoder_mask'].to(device) # (Batch, 1, 1, max_Seq_len)
+            label = batch['label'].to(device) #(Batch, max_Seq_len)
+            # Output of the model
+            encoder_output = model.encode(encoder_input, encoder_mask) # (Batch, Max_Seq_len, embedding_dim)
+            decoder_output = model.decoder(encoder_output, encoder_mask, decoder_input, decoder_mask) # (Batch, Max_Seq_len, embedding_dim)
+            projection_output = model.projection(decoder_output) # (Batch, Max_Seq_len, target_vocab_size)
+
+            # Compute loss for each batch.
+            # first  (Batch, Max_Seq_len, target_vocab_size) --> (Batch * Max_Seq_len, target_vocab_size) 
+            loss = loss_function(projection_output.view(-1, target_tokenizer.get_vocab_size()), label.view(-1))
+
+            # Show the lost on the progress bar
+            batch_iterator.set_postfix({"loss": f"{loss.item():6.3f}"})
+            # loss value
+            running_loss.append(loss.item())
+        # Loss value after each epoch
+        results["train loss"].append(np.mean(running_loss))
+        # log the loss value
+        wandb.log({"Val loss": np.mean(running_loss), "epoch": epoch})
+   
+    
+
+
 def run_epoch_train(model, optimizer, data_loader, loss_function, device, results, score_functions, epoch):
     model = model.to(device)
+    model.train()
     running_loss = []
     batch_iterator = tqdm(data_loader, desc= f'Processing epoch {epoch:02d}')
     for batch in batch_iterator:
