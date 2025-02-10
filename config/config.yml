@@ -18,4 +18,18 @@ DATASET:
 
 TRAIN:
   batch_size: 32
+  epochs: 50
+  lr: 0.0001
+
+BENCHMARK:
+  model_name: 'translation'
+  model_folder: 'trained_model/weights'
+  preload: None
+  experiment_name: 'runs/translation_model'
+
+
+
+
+
+
 
