@@ -212,3 +212,5 @@ def get_weights(config, epoch: str):
     model_name = config['BENCHMARK']['model_name']
     model_filename = f'{model_name}{epoch}.pt'
     return str(Path('.')/model_folder/model_filename)
+
+

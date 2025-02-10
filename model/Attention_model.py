@@ -498,37 +498,37 @@ class Transformer(nn.Module):
         self.decoder_position = decoder_position
         self.projection_layer = projection_layer
 
-    def encode(self, source, source_mask):
+    def encode(self, encoder_input, encoder_mask):
         """
         Forward pass for the encoder
 
         Args:
-            source (torch.Tensor): Source tensor.
-            source_mask (torch.Tensor): Source mask tensor.
+            encoder_input (torch.Tensor): Input of encoder.
+            encoder_mask (torch.Tensor): Source mask tensor.
 
         Returns:
             torch.Tensor: Output tensor.
         """
         # Pass the source tensor through the embedding and positional encoding
-        x = self.encoder_position(self.encoder_embed(source))
+        x = self.encoder_position(self.encoder_embed(encoder_input))
         # Pass through the encoder
-        return self.encoder(x, source_mask)
+        return self.encoder(x, encoder_mask)
 
-    def decode(self, target, encoder_output, source_mask, target_mask):
+    def decode(self, encoder_output, encoder_mask, decoder_input, decoder_mask):
         """ 
         Forward pass for the decoder
         Args:
-            target (torch.Tensor): Target tensor.
             encoder_output (torch.Tensor): Output from the encoder.
-            source_mask (torch.Tensor): Source mask tensor.
-            target_mask (torch.Tensor): Target mask tensor.
+            encoder_mask (torch.Tensor): Encoder mask tensor.
+            decoder_input (torch.Tensor): Input of decoder
+            decoder_mask (torch.Tensor): Mask of the encoder.
         Returns:
             torch.Tensor: Output tensor.
         """
         # Pass the target tensor through the embedding and positional encoding
-        x = self.decoder_position(self.decoder_embed(target))
+        x = self.decoder_position(self.decoder_embed(decoder_input))
         # Pass through the decoder
-        return self.decoder(x, encoder_output, source_mask, target_mask)
+        return self.decoder(x, encoder_output, encoder_mask, decoder_mask)
 
     def projection(self, x):
         """

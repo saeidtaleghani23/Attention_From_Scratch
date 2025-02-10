@@ -1,108 +1,60 @@
 from model.Attention_model import build_transformer_model
 import time
-import torch
+import torch # type: ignore
+import torch.nn as nn # type: ignore 
 import os
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score # type: ignore
 from util import get_dataset, get_weights 
-import numpy as np
+import numpy as np # type: ignore
 import wandb
 import yaml
+from tqdm import tqdm # type: ignore
 
 
-def moveTo(obj, device):
-    """
-    obj: the python object to move to a device, or to move its contents to a device
-    device: the compute device to move objects to
-    """
-    if hasattr(obj, "to"):
-        return obj.to(device)
-    elif isinstance(obj, list):
-        return [moveTo(x, device) for x in obj]
-    elif isinstance(obj, tuple):
-        return tuple(moveTo(list(obj), device))
-    elif isinstance(obj, set):
-        return set(moveTo(list(obj), device))
-    elif isinstance(obj, dict):
-        to_ret = dict()
-        for key, value in obj.items():
-            to_ret[moveTo(key, device)] = moveTo(value, device)
-        return to_ret
-    else:
-        return obj
-
-
-def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_functions, prefix="", desc=None):
-
+def run_epoch_train(model, optimizer, data_loader, loss_function, device, results, score_functions, epoch):
     model = model.to(device)
     running_loss = []
-    y_true = []
-    y_pred = []
-    start = time.time()
-    for inputs, labels in (data_loader):
-        # -- Move the batch to the device we are using.
-        inputs = moveTo(inputs, device)
-        labels = moveTo(labels, device)
+    batch_iterator = tqdm(data_loader, desc= f'Processing epoch {epoch:02d}')
+    for batch in batch_iterator:
+        encoder_input = batch['encoder_input'].to(device) # (Batch, max_Seq_len)
+        decoder_input = batch['decoder_input'].to(device) # (Batch, max_Seq_len)
+        encoder_mask = batch['encoder_mask'].to(device) # (Batch, 1, 1, max_Seq_len)
+        decoder_mask = batch['decoder_mask'].to(device) # (Batch, 1, 1, max_Seq_len)
+        label = batch['label'].to(device) #(Batch, max_Seq_len)
+        # Output of the model
+        encoder_output = model.encode(encoder_input, encoder_mask) # (Batch, Max_Seq_len, embedding_dim)
+        decoder_output = model.decoder(encoder_output, encoder_mask, decoder_input, decoder_mask) # (Batch, Max_Seq_len, embedding_dim)
+        projection_output = model.projection(decoder_output) # (Batch, Max_Seq_len, target_vocab_size)
 
-        if prefix == "validation" or prefix == "test":
-            inputs.requires_grad_(False)  # Ensure inputs don't track gradients
-            labels.requires_grad_(False)  # Ensure labels don't track gradients
+        # Compute loss for each batch.
+        # first  (Batch, Max_Seq_len, target_vocab_size) --> (Batch * Max_Seq_len, target_vocab_size) 
+        loss = loss_function(projection_output.view(-1, target_tokenizer.get_vocab_size()), label.view(-1))
 
-        # -- Output of the model
-        y_hat = model(inputs)
-
-        # -- Compute loss.
-        loss = loss_func(y_hat, labels)
-
-        # -- Training?
-        if model.training:
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
-
-        # -- Now we are just grabbing some information we would like to have
+        # Show the lost on the progress bar
+        batch_iterator.set_postfix({"loss": f"{loss.item():6.3f}"})
+        # Back propagation
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad(set_to_none=True)
+        # loss value
         running_loss.append(loss.item())
+    # Loss value after each epoch
+    results["train loss"].append(np.mean(running_loss))
 
-        if len(score_functions) > 0 and isinstance(labels, torch.Tensor):
-            # -- moving labels & predictions back to CPU for computing / storing predictions
-            labels = labels.detach().cpu().numpy()
-            y_hat = y_hat.detach().cpu().numpy()
-            # -- add to predictions so far
-            y_true.extend(labels.tolist())
-            y_pred.extend(y_hat.tolist())
-    # -- end of one training epoch
-    end = time.time()
+    # log the loss value
+    wandb.log({"Train loss": np.mean(running_loss), "epoch": epoch})
 
-    y_pred = np.asarray(y_pred)
-    # We have a classification problem, convert to labels
-    if len(y_pred.shape) == 2 and y_pred.shape[1] > 1:
-        y_pred = np.argmax(y_pred, axis=1)
-    # Else, we assume we are working on a regression problem
-
-    results[prefix + " loss"].append(np.mean(running_loss))
-    for name, score_func in score_functions.items():
-        try:
-            results[prefix + " " + name].append(score_func(y_true, y_pred))
-        except:
-            results[prefix + " " + name].append(float("NaN"))
-    return end-start  # time spent on epoch
-
-
-def train_model(epochs,
+def train_model(initial_epoch,
+                epochs,
                 model,
                 optimizer,
                 train_loader,
                 loss_func,
                 score_functions,
+                device,
                 result_path,
-                patch_size,
                 validation_loader=None,
                 test_loader=None):
-
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-    # -- Create Result file
-    if os.path.exists(result_path) is not True:
-        os.mkdir(result_path)
 
     # -- save all results
     checkpoint_file_results = os.path.join(
@@ -113,16 +65,14 @@ def train_model(epochs,
 
     # -- send model on the device
     model = model.to(device)
-    to_track = ["epoch", "total time", "train Accuracy", "train loss"]
+    to_track = ["epoch", "total time", "train loss"]
 
     # -- There is Validation loader?
     if validation_loader is not None:
-        to_track.append("validation Accuracy")
         to_track.append("validation loss")
 
     # -- There is test loader ?
     if test_loader is not None:
-        to_track.append("test Accuracy")
         to_track.append("test loss")
 
     total_train_time = 0
@@ -132,18 +82,18 @@ def train_model(epochs,
     for item in to_track:
         results[item] = []
 
-    Best_validation_Accuracy = 0.0
+    Best_validation_loss = np.inf
 
     # -- Train model
     print('Training begins...\n')
 
-    for epoch in range(epochs):
+    for epoch in range(initial_epoch, epochs):
         # -- set the model on train
-        model = model.train()
+        model.train()
         # -- Train for one epoch
         total_train_time += run_epoch(model, optimizer, train_loader,
                                       loss_func, device, results,
-                                      score_functions, prefix="train", desc="Training")
+                                      score_functions, epoch, prefix="train", desc="Training")
 
         # -- Save epoch and processing time
         results["epoch"].append(epoch)
@@ -172,31 +122,16 @@ def train_model(epochs,
             'optimizer_state_dict': optimizer.state_dict(),
             'results': results
         }, checkpoint_file_results)
-        # show the progress and metrics
-        print('\nEpoch: {}   Training accuracy: {:.2f}   Validation accuracy: {:.2f}   Test Accuracy: {:.2f}'
-              .format(epoch, results['train Accuracy'][-1]*100, results['validation Accuracy'][-1]*100, results['test Accuracy'][-1]*100))
-        # save the model based on the validation accuracy
-        if results['validation Accuracy'][-1] > Best_validation_Accuracy:
-            print('\nEpoch: {}   Training accuracy: {:.2f}   best Val accuracy: {:.2f}   Test Accuracy: {:.2f}'
-                  .format(epoch, results['train Accuracy'][-1]*100, results['validation Accuracy'][-1]*100, results['test Accuracy'][-1]*100))
-            Best_validation_Accuracy = results['validation Accuracy'][-1]
-            best_result = {}
-            best_result["epoch"] = []
-            best_result["train accuracy"] = []
-            best_result["validation accuracy"] = []
-            best_result["test accuracy"] = []
-
-            best_result["epoch"].append(epoch)
-            best_result["train accuracy"].append(results['train Accuracy'][-1])
-            best_result["validation accuracy"].append(
-                results['validation Accuracy'][-1])
-            best_result["test accuracy"].append(results['test Accuracy'][-1])
-
+        
+        # save the model based on the validation loss
+        if results['validation loss'][-1] < Best_validation_loss:
+            print('\nEpoch: {}   Training loss: {:.2f}   best Val loss: {:.2f}   Test loss: {:.2f}'
+                  .format(epoch, results['train loss'][-1], results['validation loss'][-1], results['test loss'][-1]))
+            Best_validation_loss = results['validation loss'][-1]
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'results': best_result
             }, checkpoint_file_best_result)
 
 
@@ -226,8 +161,53 @@ if __name__ == '__main__':
     train_dataloader, val_dataloader, test_dataloader, source_tokenizer, target_tokenizer = get_dataset(
         config)
     # get model
-    from model.Attention_model import build_transformer_model
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = build_transformer_model(config)
     # define optimizer
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config['TRAIN']['lr'], eps=1e-9)
+    
+    #
+    source_language = config['DATASET']['source_lang']
+    target_language = config['DATASET']['target_lang']
+    model_name = config['BENCHMARK']['model_name']
+
+    result_path = os.path.join(config['BENCHMARK']['model_folder'], f'{model_name}_{source_language}_{target_language}')
+    os.makedirs(result_path, exist_ok=True)
+
+
+    initial_epoch= 0
+    global_step = 0
+    if config['TRAIN']['preload']:
+        saved_model_path = os.path.join(result_path,'BestResult.pt')
+        # Assuming you have defined your model and optimizer
+        checkpoint = torch.load(saved_model_path)
+        # Load the model state
+        model.load_state_dict(checkpoint['model_state_dict'])
+        # Load the optimizer state
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # Optionally, load the epoch and results for tracking
+        initial_epoch = checkpoint['epoch'] +1
+    
+    loss_function = nn.CrossEntropyLoss(ignore_index = source_tokenizer.token_to_id('[PAD]'), label_smoothing = 0.1).to(device)
+
+    Start = time.time()
+
+    # -- Train the model
+    train_model(initial_epoch,
+        config["TRAIN"]["epochs"],
+        model,
+        optimizer,
+        train_dataloader,
+        loss_function,
+        score_functions,
+        device,
+        result_path,
+        validation_loader=val_dataloader,
+        test_loader=test_dataloader,
+    )
+
+    End = time.time()
+    Diff_hrs = (End - Start) / 3600
+    print("***********      End of Training        **************")
+    print("\n It took: {:.3f} hours".format(Diff_hrs))

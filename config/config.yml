@@ -20,6 +20,7 @@ TRAIN:
   batch_size: 32
   epochs: 50
   lr: 0.0001
+  preload: False
 
 BENCHMARK:
   model_name: 'translation'
