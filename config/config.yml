@@ -1,9 +1,21 @@
-source_vocab_size: 5000
-target_vocab_size: 5000
-source_sq_len: 200
-target_sqe_len: 200
-embedding_dim: 512
-num_heads: 8
-num_layers: 6
-dropout: 0.1
-ff_hidden_size: 2048
+MODEL:
+  source_vocab_size: 5000
+  target_vocab_size: 5000
+  source_sq_len: 350
+  target_sqe_len: 350
+  embedding_dim: 512
+  num_heads: 8
+  num_layers: 6
+  dropout: 0.1
+  ff_hidden_size: 2048
+
+DATASET:
+  dataset_path: './dataset'
+  dataset_name: 'opus_books'
+  source_lang: 'eng'
+  target_lang: 'fr'
+  tokenizer_file: "./tokenizer/tokenizer_{0}.json"
+
+TRAIN:
+  batch_size: 32
+
