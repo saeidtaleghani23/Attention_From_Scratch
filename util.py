@@ -210,3 +210,10 @@ class Seq2SeqDataset(Dataset):
             "source_text": source_text,
             "target_text": target_text,
         }
+
+# get saved model
+def get_weights(config, epoch: str):
+    model_folder = config['BENCHMARK']['model_folder']
+    model_name = config['BENCHMARK']['model_name']
+    model_filename = f'{model_name}{epoch}.pt'
+    return str(Path('.')/model_folder/model_filename)
