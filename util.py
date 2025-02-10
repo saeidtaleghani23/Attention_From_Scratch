@@ -75,7 +75,7 @@ def build_tokenizer(config: Dict, dataset: Iterable[Dict], language: str):
 
 # Load the dataset
 
-def load_dataset(config):
+def get_dataset(config):
     cache_dir = os.path.join(
         config['DATASET']['dataset_path'], config['DATASET']['dataset_name'])
     if not os.path.exists(cache_dir):  # If the dataset directory does not exists
@@ -86,8 +86,8 @@ def load_dataset(config):
     dataset_name = config['DATASET']['dataset_name']
     max_seq_len = config['MODEL']['source_sq_len']
 
-    dataset = load_dataset(
-        dataset_name, f'{source_lang}-{target_lang}', cache_dir=cache_dir, split='train')
+    dataset = load_dataset(dataset_name, f'{source_lang}-{target_lang}', split='train', cache_dir = cache_dir)
+    #dataset =   load_dataset('opus_books', 'en-fr', split='train') 
 
     # build tokenizer
     source_tokenizer = build_tokenizer(config, dataset, source_lang)
@@ -129,14 +129,10 @@ class Seq2SeqDataset(Dataset):
         self.max_seq_len = max_seq_len
 
         # start of a sentence ID
-        self.sos_token = torch.Tensor(
-            [self.source_tokenizer.token_to_id(['[SOS]'])], dtype=torch.int64)
-        # end of a sentence ID
-        self.eos_token = torch.Tensor(
-            [self.source_tokenizer.token_to_id(['[EOS]'])], dtype=torch.int64)
-        # padds
-        self.pad_token = torch.Tensor(
-            [self.source_tokenizer.token_to_id(['[PAD]'])], dtype=torch.int64)
+        self.sos_token = torch.tensor([self.source_tokenizer.token_to_id('[SOS]')], dtype=torch.int64)
+        self.eos_token = torch.tensor([self.source_tokenizer.token_to_id('[EOS]')], dtype=torch.int64)
+        self.pad_token = torch.tensor([self.source_tokenizer.token_to_id('[PAD]')], dtype=torch.int64)
+
 
     def __len__(self):
         return len(self.dataset)

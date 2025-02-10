@@ -12,7 +12,7 @@ MODEL:
 DATASET:
   dataset_path: './dataset'
   dataset_name: 'opus_books'
-  source_lang: 'eng'
+  source_lang: 'en'
   target_lang: 'fr'
   tokenizer_file: "./tokenizer/tokenizer_{0}.json"
 

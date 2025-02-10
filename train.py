@@ -3,29 +3,36 @@ import time
 import torch
 import os
 from sklearn.metrics import accuracy_score
-
+from util import get_dataset
 import numpy as np
 import wandb
 import yaml
-# Authenticate with your API key
-wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
 
 
+def moveTo(obj, device):
+    """
+    obj: the python object to move to a device, or to move its contents to a device
+    device: the compute device to move objects to
+    """
+    if hasattr(obj, "to"):
+        return obj.to(device)
+    elif isinstance(obj, list):
+        return [moveTo(x, device) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(moveTo(list(obj), device))
+    elif isinstance(obj, set):
+        return set(moveTo(list(obj), device))
+    elif isinstance(obj, dict):
+        to_ret = dict()
+        for key, value in obj.items():
+            to_ret[moveTo(key, device)] = moveTo(value, device)
+        return to_ret
+    else:
+        return obj
 
 
-# Initialize W&B
-wandb.init(
-    project="translation",  # Name of your project
-    config={
-        "learning_rate": config['TRAIN']['lr'],
-        "batch_size": config['TRAIN']['batch_size'],
-        "epochs": config['TRAIN']['epochs'],
-        "model": 'english_to_french',
-    }
-)
+def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_functions, prefix="", desc=None):
 
-def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_funcs, prefix="", desc=None):   
-    
     model = model.to(device)
     running_loss = []
     y_true = []
@@ -55,7 +62,7 @@ def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_f
         # -- Now we are just grabbing some information we would like to have
         running_loss.append(loss.item())
 
-        if len(score_funcs) > 0 and isinstance(labels, torch.Tensor):
+        if len(score_functions) > 0 and isinstance(labels, torch.Tensor):
             # -- moving labels & predictions back to CPU for computing / storing predictions
             labels = labels.detach().cpu().numpy()
             y_hat = y_hat.detach().cpu().numpy()
@@ -72,7 +79,7 @@ def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_f
     # Else, we assume we are working on a regression problem
 
     results[prefix + " loss"].append(np.mean(running_loss))
-    for name, score_func in score_funcs.items():
+    for name, score_func in score_functions.items():
         try:
             results[prefix + " " + name].append(score_func(y_true, y_pred))
         except:
@@ -80,12 +87,12 @@ def run_epoch(model, optimizer, data_loader, loss_func, device, results, score_f
     return end-start  # time spent on epoch
 
 
-def train_model(epoches,
+def train_model(epochs,
                 model,
                 optimizer,
                 train_loader,
                 loss_func,
-                score_funcs,
+                score_functions,
                 result_path,
                 patch_size,
                 validation_loader=None,
@@ -99,10 +106,10 @@ def train_model(epoches,
 
     # -- save all results
     checkpoint_file_results = os.path.join(
-        result_path, ('All_results_'+str(patch_size) + '_patchsize.pt'))
+        result_path, ('All_results.pt'))
     # -- save the best result based on validation accuracy
     checkpoint_file_best_result = os.path.join(
-        result_path, ('BestResult_' + str(patch_size) + '_patchsize.pt'))
+        result_path, ('BestResult.pt'))
 
     # -- send model on the device
     model = model.to(device)
@@ -130,13 +137,13 @@ def train_model(epoches,
     # -- Train model
     print('Training begins...\n')
 
-    for epoch in range(epoches):
+    for epoch in range(epochs):
         # -- set the model on train
         model = model.train()
         # -- Train for one epoch
         total_train_time += run_epoch(model, optimizer, train_loader,
                                       loss_func, device, results,
-                                      score_funcs, prefix="train", desc="Training")
+                                      score_functions, prefix="train", desc="Training")
 
         # -- Save epoch and processing time
         results["epoch"].append(epoch)
@@ -148,7 +155,7 @@ def train_model(epoches,
             with torch.no_grad():
                 run_epoch(model, optimizer, validation_loader,
                           loss_func, device, results,
-                          score_funcs, prefix="validation", desc="Validating")
+                          score_functions, prefix="validation", desc="Validating")
 
         #   ******  Testing  ******
         if test_loader is not None:
@@ -156,7 +163,7 @@ def train_model(epoches,
             with torch.no_grad():
                 run_epoch(model, optimizer, test_loader,
                           loss_func, device, results,
-                          score_funcs, prefix="test", desc="Testing")
+                          score_functions, prefix="test", desc="Testing")
 
         #   ******  Save results of each epoch  ******
         torch.save({
@@ -192,15 +199,35 @@ def train_model(epoches,
                 'results': best_result
             }, checkpoint_file_best_result)
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     # Read the config file
-    with open ('./config/config.yaml', 'r') as file:
+    with open('./config/config.yaml', 'r') as file:
         config = yaml.safe_load(file)
 
-    Result_Directory = os.path.join(config['BENCHMARK']['results_path'], config['BENCHMARK']['model_name'])  
-    os.mkdir(Result_Directory, exist_ok=True)
+    # Initialize W&B
+    # Authenticate with your API key
+    wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
+    wandb.init(
+        project="translation",  # Name of your project
+        config={
+            "learning_rate": config['TRAIN']['lr'],
+            "batch_size": config['TRAIN']['batch_size'],
+            "epochs": config['TRAIN']['epochs'],
+            "model": 'english_to_french',
+        })
 
-    score_funcs = {"Accuracy": accuracy_score}
+    Result_Directory = os.path.join(
+        config['BENCHMARK']['results_path'], config['BENCHMARK']['model_name'])
+    os.makedirs(Result_Directory, exist_ok=True)
 
-
-
+    score_functions = {"Accuracy": accuracy_score}
+    # getting the dataloaders
+    train_dataloader, val_dataloader, test_dataloader, source_tokenizer, target_tokenizer = get_dataset(
+        config)
+    # get model
+    from model.Attention_model import build_transformer_model
+    model = build_transformer_model(config)
+    # define optimizer
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=config['TRAIN']['lr'], eps=1e-9)

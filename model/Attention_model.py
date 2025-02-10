@@ -550,15 +550,15 @@ def build_transformer_model(config) -> Transformer:
     Args:
         config (_type_): _description_
     """
-    source_vocab_size = config['source_vocab_size']
-    target_vocab_size = config['target_vocab_size']
-    source_sq_len = config['source_sq_len']
-    target_sqe_len = config['target_sqe_len']
-    embedding_dim = config['embedding_dim']
-    num_heads = config['num_heads']
-    num_layers = config['num_layers']
-    dropout = config['dropout']
-    ff_hidden_size = config['ff_hidden_size']
+    source_vocab_size = config['MODEL']['source_vocab_size']
+    target_vocab_size = config['MODEL']['target_vocab_size']
+    source_sq_len = config['MODEL']['source_sq_len']
+    target_sqe_len = config['MODEL']['target_sqe_len']
+    embedding_dim = config['MODEL']['embedding_dim']
+    num_heads = config['MODEL']['num_heads']
+    num_layers = config['MODEL']['num_layers']
+    dropout = config['MODEL']['dropout']
+    ff_hidden_size = config['MODEL']['ff_hidden_size']
 
     # Create the input embedding layers
     encoder_embed = InputEmbedding(source_vocab_size, embedding_dim)
