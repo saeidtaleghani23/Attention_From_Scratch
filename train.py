@@ -3,7 +3,7 @@ import time
 import torch
 import os
 from sklearn.metrics import accuracy_score
-from util import get_dataset
+from util import get_dataset, get_weights 
 import numpy as np
 import wandb
 import yaml
