@@ -89,10 +89,10 @@ def get_dataset(config):
     dataset = load_dataset(dataset_name, f'{source_lang}-{target_lang}', split='train', cache_dir = cache_dir)
 
     # build tokenizer
-    source_tokenizer = build_tokenizer(config, dataset, source_lang)
-    target_tokenizer = build_tokenizer(config, dataset, target_lang)
+    encoder_tokenizer = build_tokenizer(config, dataset, source_lang)
+    decoder_tokenizer = build_tokenizer(config, dataset, target_lang)
+    
     # create train, val, and test datasets
-
     train_dataset_size = int(0.8*len(dataset))
     val_dataset_size = int((len(dataset) - train_dataset_size) // 2)
     test_dataset_size = len(dataset) - train_dataset_size - val_dataset_size
@@ -102,18 +102,22 @@ def get_dataset(config):
 
     # generate datasets
     train_dataset = Seq2SeqDataset(
-        train_dataset, source_tokenizer, target_tokenizer, source_lang, target_lang, max_seq_len)
+        train_dataset, encoder_tokenizer, decoder_tokenizer, source_lang, target_lang, max_seq_len)
+    
     val_dataset = Seq2SeqDataset(
-        val_dataset,   source_tokenizer, target_tokenizer, source_lang, target_lang, max_seq_len)
+        val_dataset,   encoder_tokenizer, decoder_tokenizer, source_lang, target_lang, max_seq_len)
+    
     test_dataset = Seq2SeqDataset(
-        test_dataset,  source_tokenizer, target_tokenizer, source_lang, target_lang, max_seq_len)
+        test_dataset,  encoder_tokenizer, decoder_tokenizer, source_lang, target_lang, max_seq_len)
 
     train_dataloader = DataLoader(
         train_dataset, batch_size=config['TRAIN']['batch_size'], shuffle=True)
+    
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
+    
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
-    return train_dataloader, val_dataloader, test_dataloader, source_tokenizer, target_tokenizer
+    return train_dataloader, val_dataloader, test_dataloader, encoder_tokenizer, decoder_tokenizer
 
 
 # Seq2SeqDataset
@@ -184,7 +188,7 @@ class Seq2SeqDataset(Dataset):
         encoder_mask = (encoder_input != self.pad_token).unsqueeze(
             0).unsqueeze(0).int()  # (1, 1, max_seq_len)
 
-        # Create decoder that 1 shows not padded token ids and 0 shows padded token ids
+        # Create decoder mask that 1 shows not padded token ids and 0 shows padded token ids
         decoder_padding_mask = (decoder_input != self.pad_token).unsqueeze(
             0).unsqueeze(0).int()  # (1, 1, max_seq_len)
         
@@ -193,11 +197,10 @@ class Seq2SeqDataset(Dataset):
         causal_mask = torch.tril(torch.ones((seq_len, seq_len), diagonal=1)).type(
             torch.int64)  # (max_seq_len, max_seq_len)
         
-        causal_mask = causal_mask.unsqueeze(
-            0).unsqueeze(0)  # (1, max_seq_len, max_seq_len)
+        causal_mask = causal_mask.unsqueeze(0)  # (1, max_seq_len, max_seq_len)
         
         # Combine padding mask and causal mask for the decoder
-        decoder_mask = (causal_mask & decoder_padding_mask) # (1, 1, seq_len, seq_len)
+        decoder_mask = (causal_mask & decoder_padding_mask) # (1, max_seq_len, max_seq_len)
 
         return {
             "encoder_input": encoder_input, # token IDS (max_seq_len,)
