@@ -435,9 +435,9 @@ class Decoder(nn.Module):
 
         Args:
             x (torch.Tensor): Input tensor.
-            encoder_output (torch.Tensor): Output from the encoder.
-            source_mask (torch.Tensor): Source mask tensor.
-            target_mask (torch.Tensor): Target mask tensor.
+            encoder_output (torch.Tensor): Output from the encoder.(Batch, Seq_len, embed_dim)
+            source_mask (torch.Tensor): Source mask tensor. (Batch, 1, Seq_len)
+            target_mask (torch.Tensor): Target mask tensor. (Batch, 1, Seq_len, Seq_len)
 
         Returns:
             torch.Tensor: Output tensor.

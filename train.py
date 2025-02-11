@@ -33,12 +33,19 @@ def greedy_decode(
         decoder_mask = causal_mask.unsqueeze(0).type_as(encoder_mask).to(device)  # (1, seq_len, seq_len)
         
         # calculate output
-        out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
-        print(f"model's output shape in greedy_decode : {out.shape}"  )
+        out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # 
+        
 
         # get next token
-        # out[:, -1] is the embedding of the last token from  decoder part
-        prob = model.project(out[:, -1])
+        # Python Note:
+        # out[:, -1] is the embedding of the last token from the decoder output.
+        # If out.shape = (1, seq_len, embed_dim), then out[:, -1].shape = (1, embed_dim).
+        # ":" means "select all batches" (in this case, batch size is 1).
+        # "-1" refers to the last token along the sequence dimension (the final token in the sequence).
+        # Since there's no index for the embed_dim dimension, all 512 values are selected.
+        # In other words, out[:, -1] = out[:, -1, :]
+
+        prob = model.project(out[:, -1]) # (batch, voc_size) --> (1, 10000)
         _, next_word = torch.max(prob, dim=1)
         decoder_input = torch.cat(
             [
@@ -54,70 +61,74 @@ def greedy_decode(
     return decoder_input.squeeze(0)
 
 
-def run_epoch_val(
-    model,
-    val_loader,
-    loss_function,
-    device,
-    enoder_tokenizer,
-    decoder_tokenizer,
-    max_seq_len,
-    results,
-    score_functions,
-    epoch,
-    print_msg,
-    num_examples
-):
+def run_val_epoch(model,  val_loader,loss_function, device,encoder_tokenizer,  decoder_tokenizer,max_seq_len, results, epoch,prefix = 'val'):
+
     model= model.to(device)
     model.eval()
-    count = 0
-
-    source_texts = []
-    expected = []
-    predicted = []
+    running_accuracy = []
+    running_loss = []
     
     with torch.no_grad():
         for batch in val_loader:
-            count += 1
-            encoder_input = batch["encoder_input"].to(device) # (b, seq_len)
-            encoder_mask = batch["encoder_mask"].to(device) # (b, 1, 1, seq_len)
+            encoder_input = batch["encoder_input"].to(device) # (1, seq_len)
+            encoder_mask = batch["encoder_mask"].to(device) # (1, 1, 1, seq_len)
+            label = batch["label"].to(device)  # (1, max_Seq_len)
             # check that the batch size is 1
             assert encoder_input.size(
                 0) == 1, "Batch size must be 1 for validation"
-            model_out = greedy_decode(model, encoder_input, encoder_mask, enoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-            source_text = batch["src_text"][0]
-            target_text = batch["tgt_text"][0]
-            # decoder_tokenizer.decode ()Takes the array of token indices and converts it into a natural language sentence
-            # by mapping each token ID back to its corresponding word.
-            model_out_text = decoder_tokenizer.decode(model_out.detach().cpu().numpy())
-            
-            source_texts.append(source_text)
-            expected.append(target_text)
-            predicted.append(model_out_text)
-            
-            # Print the source, target and model output
-            print_msg('-'*console_width)
-            print_msg(f"{f'SOURCE: ':>12}{source_text}")
-            print_msg(f"{f'TARGET: ':>12}{target_text}")
-            print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
+            # Use greedy decoding to generate the predicted sequences token IDs
+            predicted_tokens = greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
 
-            if count == num_examples:
-                print_msg('-'*console_width)
-                break
-            
-def run_epoch_train(
-    model,
-    optimizer,
-    data_loader,
-    loss_function,
-    device,
-    results,
-    score_functions,
-    epoch,
-):
+            # Calculate loss for each batch (like in the training phase)
+            encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
+            decoder_output = model.decoder(
+            encoder_output, encoder_mask, predicted_tokens, encoder_mask  # Use predicted tokens as decoder input
+        )
+            projection_output = model.projection(decoder_output)  # (1, max_Seq_len, target_vocab_size)
+
+            # Compute loss (cross entropy loss)
+            loss = loss_function(
+                projection_output.view(-1, decoder_tokenizer.get_vocab_size()),  # Flatten the output
+                label.view(-1)  # Flatten the labels as well
+            )
+
+            # Show the loss for this batch
+            running_loss.append(loss.item())
+
+            # Calculate accuracy for each sequence
+            pad_token_id = decoder_tokenizer.token_to_id("[PAD]")
+            non_pad_mask = label != pad_token_id  # Mask out padding tokens
+
+            # Avoid division by zero
+            if non_pad_mask.sum() > 0:  
+                correct_predictions = (predicted_tokens == label) & non_pad_mask  # Compare predicted and actual tokens
+                accuracy = correct_predictions.sum() / non_pad_mask.sum()  # Scalar accuracy for the batch
+                running_accuracy.append(accuracy.item())
+            else:
+                running_accuracy.append(0)  # If no non-pad tokens, append 0 accuracy
+
+
+    # Calculate average loss and accuracy
+    avg_loss = np.mean(running_loss)
+    avg_accuracy = np.mean(running_accuracy)
+    
+    # Store results in dictionary 
+    results[prefix + " loss"] = avg_loss
+    results[prefix + " accuracy"] = avg_accuracy
+
+    # log the loss and accuracy value to WandB
+    wandb.log({f'{prefix} loss': avg_loss, "epoch": epoch})
+    wandb.log({f'{prefix} accuracy': avg_accuracy * 100 , "epoch": epoch})
+
+    return 
+
+      
+def run_train_epoch(model,optimizer,data_loader,loss_function, device,results,score_functions,epoch):
+    
     model = model.to(device)
     model.train()
     running_loss = []
+    running_accuracy = []
     batch_iterator = tqdm(data_loader, desc=f"Processing epoch {epoch:02d}")
     for batch in batch_iterator:
         encoder_input = batch["encoder_input"].to(device)  # (Batch, max_Seq_len)
@@ -125,13 +136,16 @@ def run_epoch_train(
         encoder_mask = batch["encoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
         decoder_mask = batch["decoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
         label = batch["label"].to(device)  # (Batch, max_Seq_len)
+
         # Output of the model
         # (Batch, Max_Seq_len, embedding_dim)
         encoder_output = model.encode(encoder_input, encoder_mask)
+
         # (Batch, Max_Seq_len, embedding_dim)
         decoder_output = model.decoder(
             encoder_output, encoder_mask, decoder_input, decoder_mask
         )
+
         # (Batch, Max_Seq_len, target_vocab_size)
         projection_output = model.projection(decoder_output)
 
@@ -142,16 +156,31 @@ def run_epoch_train(
             label.view(-1),
         )
 
+
         # Show the lost on the progress bar
         batch_iterator.set_postfix({"loss": f"{loss.item():6.3f}"})
+
         # Back propagation
         loss.backward()
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
-        # loss value
+
+        # batch loss value
         running_loss.append(loss.item())
+
+        # batch Accuracy
+        predicted_tokens = torch.argmax(projection_output, dim=-1)  # Shape: (Batch, Max_Seq_len)
+        # Mask Padding Tokens in Labels
+        pad_token_id = target_tokenizer.token_to_id("[PAD]")
+        non_pad_mask = label != pad_token_id  # Shape: (Batch, Max_Seq_len)
+        # Calculate Accuracy
+        correct_predictions = (predicted_tokens == label) & non_pad_mask  # Shape: (Batch, Max_Seq_len)
+        accuracy = correct_predictions.sum() / non_pad_mask.sum()  # Scalar value
+        running_accuracy.append(accuracy)
+
     # Loss value after each epoch
     results["train loss"].append(np.mean(running_loss))
+    results["train accuracy"].append(np.mean(running_loss))
 
     # log the loss value
     wandb.log({"Train loss": np.mean(running_loss), "epoch": epoch})
@@ -163,11 +192,11 @@ def train_model(
     model,
     optimizer,
     train_loader,
-    loss_func,
+    loss_function,
     score_functions,
     device,
     result_path,
-    enoder_tokenizer, 
+    encoder_tokenizer, 
     decoder_tokenizer,
     max_seq_len,
     validation_loader=None,
@@ -181,17 +210,13 @@ def train_model(
 
     # -- send model on the device
     model = model.to(device)
-    to_track = ["epoch", "total time", "train loss"]
+    to_track = ["epoch", "train loss", "train accuracy"]
 
     # -- There is Validation loader?
     if validation_loader is not None:
-        to_track.append("validation loss")
+        to_track.append("val accuracy")
+        to_track.append("val loss")
 
-    # -- There is test loader ?
-    if test_loader is not None:
-        to_track.append("test loss")
-
-    total_train_time = 0
     results = {}
 
     # -- Initialize every item with an empty list
@@ -207,11 +232,11 @@ def train_model(
         # -- set the model on train
         model.train()
         # -- Train for one epoch
-        run_epoch_train(
+        run_train_epoch(
             model,
             optimizer,
             train_loader,
-            loss_func,
+            loss_function,
             device,
             results,
             score_functions,
@@ -222,71 +247,52 @@ def train_model(
 
         # -- Save epoch and processing time
         results["epoch"].append(epoch)
-        results["total time"].append(total_train_time)
 
         #   ******  Validating  ******
         if validation_loader is not None:
-              run_epoch_val(
+            run_val_epoch(
                     model,
                     validation_loader,
                     loss_function,
                     device,
-                    enoder_tokenizer,
+                    encoder_tokenizer,
                     decoder_tokenizer,
                     max_seq_len,
                     results,
                     score_functions,
                     epoch,
                 )
-          
-              
-
-        #   ******  Testing  ******
-        if test_loader is not None:
-            model = model.eval()
-            with torch.no_grad():
-                run_epoch(
-                    model,
-                    optimizer,
-                    test_loader,
-                    loss_func,
-                    device,
-                    results,
-                    score_functions,
-                    prefix="test",
-                    desc="Testing",
+            # save the model based on the validation loss
+            if results["val loss"][-1] < Best_validation_loss:
+                print(
+                    "\nEpoch: {}   train loss: {:.2f}   train accuracy: {:.2f} val loss: {:.2f}   val accuracy: {:.2f}".format(
+                        epoch,
+                        results["train loss"][-1],
+                        results["train accuracy"][-1],
+                        results["val loss"][-1],
+                        results["val accuracy"][-1],
+                    )
                 )
-
-        #   ******  Save results of each epoch  ******
-        torch.save(
-            {
-                "epoch": epoch,
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "results": results,
-            },
-            checkpoint_file_results,
-        )
-
-        # save the model based on the validation loss
-        if results["validation loss"][-1] < Best_validation_loss:
-            print(
-                "\nEpoch: {}   Training loss: {:.2f}   best Val loss: {:.2f}   Test loss: {:.2f}".format(
-                    epoch,
-                    results["train loss"][-1],
-                    results["validation loss"][-1],
-                    results["test loss"][-1],
+                Best_validation_loss = results["val loss"][-1]
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                    },
+                    checkpoint_file_best_result,
                 )
-            )
-            Best_validation_loss = results["validation loss"][-1]
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                },
-                checkpoint_file_best_result,
-            )
+        
+    #  Save all recorded results 
+    torch.save(
+        {
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "results": results,
+        },
+        checkpoint_file_results,
+    )
 
 
 if __name__ == "__main__":
