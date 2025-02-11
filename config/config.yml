@@ -1,6 +1,6 @@
 MODEL:
-  source_sq_len: 400
-  target_sqe_len: 400
+  source_sq_len: 500
+  target_sqe_len: 500
   embedding_dim: 256 #512
   num_heads: 8
   num_layers: 6

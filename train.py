@@ -44,7 +44,7 @@ def greedy_decode(
         # Since there's no index for the embed_dim dimension, all 512 values are selected.
         # In other words, out[:, -1] = out[:, -1, :]
 
-        prob = model.project(out[:, -1]) # (batch, voc_size) --> (1, 10000)
+        prob = model.projection(out[:, -1]) # (batch, voc_size) --> (1, 10000)
         _, next_word = torch.max(prob, dim=1)
         decoder_input = torch.cat(
             [
@@ -78,7 +78,7 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
                 0) == 1, "Batch size must be 1 for validation"
             # Use greedy decoding to generate the predicted sequences token IDs
             predicted_tokens = greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-
+            predicted_tokens= predicted_tokens.unsqueeze(0)
             # Calculate loss for each batch (like in the training phase)
             encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
             decoder_output = model.decode(encoder_output, encoder_mask, predicted_tokens, decoder_mask )  # Use predicted tokens as decoder input
@@ -107,13 +107,13 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
                 running_accuracy.append(0)  # If no non-pad tokens, append 0 accuracy
 
 
-    # Calculate average loss and accuracy
+    # Calculate average loss and accuracy for a epoch
     avg_loss = np.mean(running_loss)
     avg_accuracy = np.mean(running_accuracy)
     
     # Store results in dictionary 
-    results[prefix + " loss"] = avg_loss
-    results[prefix + " accuracy"] = avg_accuracy
+    results[prefix + " loss"].append(avg_loss) 
+    results[prefix + " accuracy"].append(avg_accuracy)
 
     # log the loss and accuracy value to WandB
     wandb.log({f'{prefix} loss': avg_loss, "epoch": epoch})
@@ -172,12 +172,16 @@ def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,resul
         non_pad_mask = label != pad_token_id  # Shape: (Batch, Max_Seq_len)
         # Calculate Accuracy
         correct_predictions = (predicted_tokens == label) & non_pad_mask  # Shape: (Batch, Max_Seq_len)
-        accuracy = correct_predictions.sum() / non_pad_mask.sum()  # Scalar value
+        accuracy = correct_predictions.sum().item() / non_pad_mask.sum().item()  # Scalar value
         running_accuracy.append(accuracy)
 
-    # Loss value after each epoch
-    results["train loss"].append(np.mean(running_loss))
-    results["train accuracy"].append(np.mean(running_loss))
+    
+    # Calculate average loss and accuracy for a epoch
+    avg_loss = np.mean(running_loss)
+    avg_accuracy = np.mean(running_accuracy)
+
+    results["train loss"].append(avg_loss)
+    results["train accuracy"].append(avg_accuracy)
 
     # log the loss value
     wandb.log({"Train loss": np.mean(running_loss), "epoch": epoch})
@@ -256,14 +260,14 @@ def train_model(
                     prefix = 'val'
                 )
             # save the model based on the validation loss
-            if results["val loss"][-1] < Best_validation_loss:
+            if results['val loss'][-1] < Best_validation_loss:
                 print(
                     "\nEpoch: {}   train loss: {:.2f}   train accuracy: {:.2f} val loss: {:.2f}   val accuracy: {:.2f}".format(
                         epoch,
-                        results["train loss"][-1],
-                        results["train accuracy"][-1],
-                        results["val loss"][-1],
-                        results["val accuracy"][-1],
+                        results['train loss'][-1],
+                        results['train accuracy'][-1],
+                        results['val loss'][-1],
+                        results['val accuracy'][-1],
                     )
                 )
                 Best_validation_loss = results["val loss"][-1]
@@ -305,7 +309,7 @@ if __name__ == "__main__":
     wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
     wandb.init(
         project=f"translation from {source_language} to {target_language}",  # name of your project
-        name= f"{source_language}_to_{target_language}_run_{datetime.today().strftime('%Y-%m-%d')}", # name of run
+        name= f"{source_language}_to_{target_language}_run_{datetime.today().strftime('%Y-%m-%d_%H-%M')}", # name of run
         config={
             "learning_rate": config["TRAIN"]["lr"],
             "batch_size": config["TRAIN"]["batch_size"],

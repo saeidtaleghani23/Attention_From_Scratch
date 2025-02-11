@@ -29,13 +29,17 @@ class InputEmbedding(nn.Module):
         Converts token IDs of a sentence into embedding vectors
 
         Args:
-            input_token (torch.Tensor): the size of the input token is (max_seq_len,)
+            input_token (torch.Tensor): the size of the input token is (1,max_seq_len,)
 
         Returns:
             torch.Tensor: Embedded tokens. the size of the output is (max_seq_len, embed_size)
         """
+        # print('input of InputEmbedding class')
+        # print(f'input_token.shape: {input_token.shape}')
         input_embed = self.embedding(
             input_token) * math.sqrt(self.embed_size)
+        # print('output of InputEmbedding class')
+        # print(f'input_embed.shape: {input_embed.shape}')
         return input_embed
 
 class PositionEncoding(nn.Module):
@@ -83,7 +87,10 @@ class PositionEncoding(nn.Module):
         """
         assert input_embed_token.size(1) <= self.position_encoding.size(1), \
         f"Sequence length {input_embed_token.size(1)} exceeds position encoding length {self.position_encoding.size(1)}"
-
+        # print('*'*100)
+        # print('shape of parameters in PositionEncoding')
+        # print(f'input_embed_token.shape:{input_embed_token.shape}')
+        # print(f'self.position_encoding[:, :input_embed_token.size(1), :].shape:{self.position_encoding[:, :input_embed_token.size(1), :].shape}')
         x = input_embed_token + \
             (self.position_encoding[:, :input_embed_token.size(1), :]).requires_grad_(False)
         return self.dropout(x)
@@ -532,6 +539,7 @@ class Transformer(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
+        #print(f'shape of decoder_input in model.decode: {decoder_input.shape}')
         x = self.decoder_position(self.decoder_embed(decoder_input))
         # Pass through the decoder
         return self.decoder(x, encoder_output, encoder_mask, decoder_mask)

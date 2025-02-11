@@ -18,6 +18,9 @@ import os
 from pathlib import Path
 from typing import Dict, Iterable
 
+# for debug purposes 
+import itertools
+from torch.utils.data import Subset
 # Build tokenizer
 
 
@@ -87,6 +90,7 @@ def get_dataset(config):
     max_seq_len = config['MODEL']['source_sq_len'] # such as 350
 
     dataset = load_dataset(dataset_name, f'{source_lang}-{target_lang}', split='train', cache_dir = cache_dir)
+   
 
     # build tokenizer
     encoder_tokenizer = build_tokenizer(config, dataset, source_lang)
@@ -96,7 +100,8 @@ def get_dataset(config):
     train_dataset_size = int(0.8*len(dataset))
     val_dataset_size = int((len(dataset) - train_dataset_size) // 2)
     test_dataset_size = len(dataset) - train_dataset_size - val_dataset_size
-
+    # for debug the code
+    
     train_dataset, val_dataset, test_dataset = random_split(
         dataset, [train_dataset_size, val_dataset_size, test_dataset_size])
 
@@ -109,12 +114,36 @@ def get_dataset(config):
     
     test_dataset = Seq2SeqDataset(
         test_dataset,  encoder_tokenizer, decoder_tokenizer, source_lang, target_lang, max_seq_len)
+    
+    # Find the maximum length of each sentence in the source and target sentence
+    max_len_src = 0
+    max_len_tgt = 0
+
+    for item in dataset:
+        src_ids = encoder_tokenizer.encode(item['translation'][config['DATASET']['source_lang']]).ids
+        tgt_ids = decoder_tokenizer.encode(item['translation'][config['DATASET']['target_lang']]).ids
+        max_len_src = max(max_len_src, len(src_ids))
+        max_len_tgt = max(max_len_tgt, len(tgt_ids))
+
+    print(f'Max length of source sentence: {max_len_src}')
+    print(f'Max length of target sentence: {max_len_tgt}')
 
     train_dataloader = DataLoader(
         train_dataset, batch_size=config['TRAIN']['batch_size'], shuffle=True)
-    
+
+    # # Create a subset of train dataset with only the first batch's indices
+    # subset_train_dataset = Subset(train_dataset, list(range(config['TRAIN']['batch_size'])))
+
+    # # Create a new train DataLoader with subset_train_dataset
+    # train_dataloader = DataLoader(subset_train_dataset, batch_size=config['TRAIN']['batch_size'], shuffle=False)
+
     val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    
+    # # Create a subset of val dataset with only the first batch's indices
+    # subset_val_dataset = Subset(val_dataset, list(range(config['TRAIN']['batch_size'])))
+    # # Create a new train DataLoader with subset_train_dataset
+    # val_dataloader = DataLoader(subset_val_dataset, batch_size=1, shuffle=False)
+
+
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     return train_dataloader, val_dataloader, test_dataloader, encoder_tokenizer, decoder_tokenizer
@@ -160,6 +189,8 @@ class Seq2SeqDataset(Dataset):
 
         # Check the number of tokens is not bigger than max_seq_len
         if encoder_padding_tokens < 0 or decoder_padding_tokens < 0:
+            print(f'len(encoder_input_tokens): {len(encoder_input_tokens)}')
+            print(f'len(decoder_input_tokens): {len(decoder_input_tokens)}')
             raise ValueError('Sentence is too long')
         # We need to add SOS and EOS tokens into encoder tokens and pad the sentence to the max_seq_len
         encoder_input = torch.cat([self.sos_token,
