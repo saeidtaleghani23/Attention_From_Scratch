@@ -9,6 +9,7 @@ import numpy as np  # type: ignore
 import wandb  # type: ignore
 import yaml
 from tqdm import tqdm  # type: ignore
+from datetime import datetime
 
 
 def greedy_decode(
@@ -16,12 +17,8 @@ def greedy_decode(
 ):
     sos_idx = tokenizer_tgt.token_to_id("[SOS]")
     eos_idx = tokenizer_tgt.token_to_id("[EOS]")
-    print('greedy_decode')
-    print(f'encoder_input.shape: {encoder_input.shape} ')
-    print(f'encoder_mask.shape: {encoder_mask.shape} ')
     # Precompute the encoder output and reuse it for every step
     encoder_output = model.encode(encoder_input, encoder_mask)
-    print(f'encoder_output.shape: {encoder_output.shape} ')
     # Initialize the decoder input with the sos token
     decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(encoder_input).to(device)
     while True:
@@ -75,6 +72,7 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
             encoder_input = batch["encoder_input"].to(device) # (1, seq_len)
             encoder_mask = batch["encoder_mask"].to(device) # (1, 1, 1, seq_len)
             label = batch["label"].to(device)  # (1, max_Seq_len)
+            decoder_mask = batch["decoder_mask"].to(device)  # (1, 1, max_Seq_len, max_Seq_len)
             # check that the batch size is 1
             assert encoder_input.size(
                 0) == 1, "Batch size must be 1 for validation"
@@ -83,9 +81,8 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
 
             # Calculate loss for each batch (like in the training phase)
             encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
-            decoder_output = model.decoder(
-            encoder_output, encoder_mask, predicted_tokens, decoder_mask  # Use predicted tokens as decoder input
-        )
+            decoder_output = model.decode(encoder_output, encoder_mask, predicted_tokens, decoder_mask )  # Use predicted tokens as decoder input
+            
             projection_output = model.projection(decoder_output)  # (1, max_Seq_len, target_vocab_size)
 
             # Compute loss (cross entropy loss)
@@ -104,8 +101,8 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
             # Avoid division by zero
             if non_pad_mask.sum() > 0:  
                 correct_predictions = (predicted_tokens == label) & non_pad_mask  # Compare predicted and actual tokens
-                accuracy = correct_predictions.sum() / non_pad_mask.sum()  # Scalar accuracy for the batch
-                running_accuracy.append(accuracy.item())
+                accuracy = correct_predictions.sum().item() / non_pad_mask.sum().item()  # Scalar accuracy for the batch
+                running_accuracy.append(accuracy)
             else:
                 running_accuracy.append(0)  # If no non-pad tokens, append 0 accuracy
 
@@ -136,7 +133,7 @@ def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,resul
         encoder_input = batch["encoder_input"].to(device)  # (Batch, max_Seq_len)
         decoder_input = batch["decoder_input"].to(device)  # (Batch, max_Seq_len)
         encoder_mask = batch["encoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
-        decoder_mask = batch["decoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
+        decoder_mask = batch["decoder_mask"].to(device)  # (Batch, 1, max_Seq_len, max_Seq_len)
         label = batch["label"].to(device)  # (Batch, max_Seq_len)
         # Output of the model
         # (Batch, Max_Seq_len, embedding_dim)
@@ -308,7 +305,7 @@ if __name__ == "__main__":
     wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
     wandb.init(
         project=f"translation from {source_language} to {target_language}",  # name of your project
-        name= f"{source_language}_to_{target_language}_run_{wandb.run.id}", # name of run
+        name= f"{source_language}_to_{target_language}_run_{datetime.today().strftime('%Y-%m-%d')}", # name of run
         config={
             "learning_rate": config["TRAIN"]["lr"],
             "batch_size": config["TRAIN"]["batch_size"],
