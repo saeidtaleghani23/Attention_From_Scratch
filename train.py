@@ -16,9 +16,12 @@ def greedy_decode(
 ):
     sos_idx = tokenizer_tgt.token_to_id("[SOS]")
     eos_idx = tokenizer_tgt.token_to_id("[EOS]")
-
+    print('greedy_decode')
+    print(f'encoder_input.shape: {encoder_input.shape} ')
+    print(f'encoder_mask.shape: {encoder_mask.shape} ')
     # Precompute the encoder output and reuse it for every step
     encoder_output = model.encode(encoder_input, encoder_mask)
+    print(f'encoder_output.shape: {encoder_output.shape} ')
     # Initialize the decoder input with the sos token
     decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(encoder_input).to(device)
     while True:
@@ -81,7 +84,7 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
             # Calculate loss for each batch (like in the training phase)
             encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
             decoder_output = model.decoder(
-            encoder_output, encoder_mask, predicted_tokens, encoder_mask  # Use predicted tokens as decoder input
+            encoder_output, encoder_mask, predicted_tokens, decoder_mask  # Use predicted tokens as decoder input
         )
             projection_output = model.projection(decoder_output)  # (1, max_Seq_len, target_vocab_size)
 
@@ -135,13 +138,11 @@ def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,resul
         encoder_mask = batch["encoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
         decoder_mask = batch["decoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
         label = batch["label"].to(device)  # (Batch, max_Seq_len)
-
         # Output of the model
         # (Batch, Max_Seq_len, embedding_dim)
         encoder_output = model.encode(encoder_input, encoder_mask)
-
         # (Batch, Max_Seq_len, embedding_dim)
-        decoder_output = model.decoder(
+        decoder_output = model.decode(
             encoder_output, encoder_mask, decoder_input, decoder_mask
         )
 
@@ -329,16 +330,31 @@ if __name__ == "__main__":
         decoder_tokenizer,
     ) = get_dataset(config)
 
+
+    # save the test dataloader
+    os.makedirs('./dataloaders', exist_ok=True)
+    file_path='./dataloaders/dataloader_components.pth'
+    # Save the datasets
+    torch.save({
+        'train_dataloader': train_dataloader,
+        'val_dataloader': val_dataloader,
+        'test_dataloader': test_dataloader,
+        'config': config
+    }, file_path)
+    # Load the saved dataloader components
+    checkpoint = torch.load(file_path)
+    test_dataloader = checkpoint['test_dataloader']
+
+
     # get model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f'{device} device is being used')
-    print(f' source vocab size:{encoder_tokenizer.get_vocab_size()}\ntarget vocab size:{decoder_tokenizer.get_vocab_size()}')
+    #print(f' source vocab size:{encoder_tokenizer.get_vocab_size()}\ntarget vocab size:{decoder_tokenizer.get_vocab_size()}')
     model = build_transformer_model(config,  encoder_tokenizer.get_vocab_size(), decoder_tokenizer.get_vocab_size())
     # define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=config["TRAIN"]["lr"], eps=1e-9)
 
     
-
     result_path = os.path.join(
         config["BENCHMARK"]["model_folder"],
         f"{model_name}_{source_language}_{target_language}",
@@ -362,25 +378,25 @@ if __name__ == "__main__":
         ignore_index=encoder_tokenizer.token_to_id("[PAD]"), label_smoothing=0.1
     ).to(device)
 
-    Start = time.time()
+    # Start = time.time()
 
-    # -- Train the model
-    train_model(
-        initial_epoch,
-        config["TRAIN"]["epochs"],
-        model,
-        optimizer,
-        train_dataloader,
-        loss_function,
-        device,
-        result_path,
-        encoder_tokenizer,
-        decoder_tokenizer,
-        max_seq_len= config["MODEL"]["source_sq_len"],
-        validation_loader=val_dataloader,
-    )
+    # # -- Train the model
+    # train_model(
+    #     initial_epoch,
+    #     config["TRAIN"]["epochs"],
+    #     model,
+    #     optimizer,
+    #     train_dataloader,
+    #     loss_function,
+    #     device,
+    #     result_path,
+    #     encoder_tokenizer,
+    #     decoder_tokenizer,
+    #     max_seq_len= config["MODEL"]["source_sq_len"],
+    #     validation_loader=val_dataloader,
+    # )
 
-    End = time.time()
-    Diff_hrs = (End - Start) / 3600
-    print("***********      End of Training        **************")
-    print("\n It took: {:.3f} hours".format(Diff_hrs))
+    # End = time.time()
+    # Diff_hrs = (End - Start) / 3600
+    # print("***********      End of Training        **************")
+    # print("\n It took: {:.3f} hours".format(Diff_hrs))

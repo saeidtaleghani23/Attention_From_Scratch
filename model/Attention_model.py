@@ -9,7 +9,6 @@ import math
 import warnings
 warnings.simplefilter("ignore", category=DeprecationWarning)
 
-# %%
 # Object-Oriented Programming of Attention Model
 
 class InputEmbedding(nn.Module):
@@ -35,7 +34,6 @@ class InputEmbedding(nn.Module):
         Returns:
             torch.Tensor: Embedded tokens. the size of the output is (max_seq_len, embed_size)
         """
-        print(f' input to self.embedding is of shape : {input_token.shape}')
         input_embed = self.embedding(
             input_token) * math.sqrt(self.embed_size)
         return input_embed
@@ -83,13 +81,11 @@ class PositionEncoding(nn.Module):
         Returns:
             torch.Tensor: Positional encoded input of the same shape. The output shape is (batch_size, seq_len, embedding_dim)
         """
-        print(f'input_embed_token.shape:{input_embed_token.shape}')
         assert input_embed_token.size(1) <= self.position_encoding.size(1), \
         f"Sequence length {input_embed_token.size(1)} exceeds position encoding length {self.position_encoding.size(1)}"
 
         x = input_embed_token + \
             (self.position_encoding[:, :input_embed_token.size(1), :]).requires_grad_(False)
-                
         return self.dropout(x)
 
 
@@ -194,7 +190,10 @@ class MultiHeadAttention(nn.Module):
             torch.Tensor: Output tensor.
         """
         batch_size = query.shape[0]
-
+        # Ensure input tensors are of type float
+        query = query.float()
+        key = key.float()
+        value = value.float()
         # Linear transformation for query, key and value
         Q = self.q_linear(query)  # Q` = Q * W_q   (Batch, seq_len, embed_size)
         K = self.k_linear(key)  # K` = K * W_k   (Batch, seq_len, embed_size)
@@ -203,14 +202,14 @@ class MultiHeadAttention(nn.Module):
         # Split the embedding into self.heads , self.head_dim
         # and then concatenate them to get the desired number of heads
         # (Batch, heads, seq_len, head_dim)
-        Q = Q.view(batch_size, -1, self.heads,
-                   self.head_dim).permute(0, 2, 1, 3)
+        Q = Q.view(batch_size, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
+                   
         # (Batch, heads, seq_len, head_dim)
-        K = K.view(batch_size, -1, self.heads,
-                   self.head_dim).permute(0, 2, 1, 3)
+        K = K.view(batch_size, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
+                   
         # (Batch, heads, seq_len, head_dim)
-        V = V.view(batch_size, -1, self.heads,
-                   self.head_dim).permute(0, 2, 1, 3)
+        V = V.view(batch_size, -1, self.heads, self.head_dim).permute(0, 2, 1, 3)
+                   
 
         # Compute the scaled dot-product attention
         # Scaled Dot-Product Attention: Attention(Q, K, V) = softmax(Q*K^T/sqrt(d_k)) * V
@@ -219,14 +218,13 @@ class MultiHeadAttention(nn.Module):
 
         # Compute the attention score matrix (Q*K^T/sqrt(d_k))
         # (Batch, heads, seq_len, seq_len)
-        attention_score = torch.matmul(
-            Q, K.permute(0, 1, 3, 2)) / math.sqrt(d_k)
+        attention_score = torch.matmul(Q, K.permute(0, 1, 3, 2)) / math.sqrt(d_k)
+            
 
         # apply mask if provided
         if mask is not None:
-            attention_score = attention_score.masked_fill(
-                mask == 0, -1e20)
-
+            attention_score = attention_score.masked_fill(mask == 0, -1e20)
+                
         # Apply softmax to get the attention weights
         # (Batch, heads, seq_len, seq_len)
         attention_score = torch.softmax(attention_score, dim=-1)
@@ -251,7 +249,6 @@ class MultiHeadAttention(nn.Module):
 
         # Apply the output linear layer
         output = self.o_linear(attention)  # (Batch, seq_len, embed_size)
-
         return output
 
     def get_attention_weights(self) -> torch.Tensor:
@@ -307,21 +304,20 @@ class EncoderBlock(nn.Module):
         self.feed_forward = FeedForward(embed_size, ff_hidden_size, drop)
         self.residual_connection_2 = ResidualConnection(drop)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor, return_attention_scores: bool = False) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, encoder_mask: torch.Tensor, return_attention_scores: bool = False) -> torch.Tensor:
         """
         Forward pass for the encoder block
 
         Args:
             x (torch.Tensor): Input tensor.
-            mask (torch.Tensor): Mask teh padding tokens from calculations.
+            encoder_mask (torch.Tensor): Mask teh padding tokens from calculations.
 
         Returns:
             torch.Tensor: Output tensor.
         """
-
         # Pass attention output through the residual connection
         x = self.residual_connection_1(
-            x, lambda x: self.attention(x, x, x, mask))
+            x, lambda x: self.attention(x, x, x, encoder_mask))
 
         # Pass through feed-forward layer and second residual connection
         x = self.residual_connection_2(x, self.feed_forward)
@@ -349,19 +345,19 @@ class Encoder(nn.Module):
             [EncoderBlock(embed_size, heads, ff_hidden_size, drop) for _ in range(layers)])
         self.norm = LayerNormalization()
 
-    def forward(self, x, mask):
+    def forward(self, x, encoder_mask):
         """
         Forward pass for the encoder
 
         Args:
-            x (torch.Tensor): Input tensor.
-            mask (torch.Tensor): Mask tensor.
+            x (torch.Tensor): embedded tokens.
+            mask (torch.Tensor): encoder mask tensor.
 
         Returns:
             torch.Tensor: Output tensor.
         """
         for encoder in self.encoder_layers:
-            x = encoder(x, mask)
+            x = encoder(x, encoder_mask)
         return self.norm(x)
 
 # Decoder Block
@@ -389,26 +385,25 @@ class DecoderBlock(nn.Module):
         self.residual_connection_2 = ResidualConnection(drop)
         self.residual_connection_3 = ResidualConnection(drop)
 
-    def forward(self, x, encoder_output, source_mask, target_mask):
+    def forward(self, x, encoder_output, encoder_mask, decoder_mask):
         """
         Forward pass for the decoder block
 
         Args:
             x (torch.Tensor): Input tensor.
             encoder_output (torch.Tensor): Output from the encoder.
-            source_mask (torch.Tensor): Source mask tensor.
-            target_mask (torch.Tensor): Target mask tensor.
+            encoder_mask (torch.Tensor): Source mask tensor.
+            decoder_mask (torch.Tensor): Target mask tensor.
 
         Returns:
             torch.Tensor: Output tensor.
         """
         # Pass through the self-attention mechanism
         x = self.residual_connection_1(
-            x, lambda x: self.self_attention(x, x, x, target_mask))
+            x, lambda x: self.self_attention(x, x, x, decoder_mask))
 
-        # Pass through the cross-attention mechanism
         x = self.residual_connection_2(x, lambda x: self.cross_attention(
-            x, encoder_output, encoder_output, source_mask))
+            x, encoder_output, encoder_output, encoder_mask))
 
         # Pass through the feed-forward network
         x = self.residual_connection_3(x, self.feed_forward)
@@ -434,21 +429,21 @@ class Decoder(nn.Module):
             [DecoderBlock(embed_size, heads, ff_hidden_size, drop) for _ in range(layers)])
         self.norm = LayerNormalization()
 
-    def forward(self, x, encoder_output, source_mask, target_mask):
+    def forward(self, x, encoder_output, encoder_mask, decoder_mask):
         """
         Forward pass for the decoder
 
         Args:
             x (torch.Tensor): Input tensor.
             encoder_output (torch.Tensor): Output from the encoder.(Batch, Seq_len, embed_dim)
-            source_mask (torch.Tensor): Source mask tensor. (Batch, 1, Seq_len)
-            target_mask (torch.Tensor): Target mask tensor. (Batch, 1, Seq_len, Seq_len)
+            encoder_mask (torch.Tensor): Source mask tensor. (Batch, 1, Seq_len)
+            decoder_mask (torch.Tensor): Target mask tensor. (Batch, 1, Seq_len, Seq_len)
 
         Returns:
             torch.Tensor: Output tensor.
         """
         for decoder in self.decoder_layers:
-            x = decoder(x, encoder_output, source_mask, target_mask)
+            x = decoder(x, encoder_output, encoder_mask, decoder_mask)
         return self.norm(x)
 
 # Projection Layer
@@ -537,7 +532,6 @@ class Transformer(nn.Module):
         Returns:
             torch.Tensor: Output tensor.
         """
-        # Pass the target tensor through the embedding and positional encoding
         x = self.decoder_position(self.decoder_embed(decoder_input))
         # Pass through the decoder
         return self.decoder(x, encoder_output, encoder_mask, decoder_mask)
