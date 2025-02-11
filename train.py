@@ -307,7 +307,8 @@ if __name__ == "__main__":
     # Authenticate with your API key
     wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
     wandb.init(
-        project=f"translation from {source_language} to {target_language}",  # Name of your project
+        project=f"translation from {source_language} to {target_language}",  # name of your project
+        name= f"{source_language}_to_{target_language}_run_{wandb.run.id}", # name of run
         config={
             "learning_rate": config["TRAIN"]["lr"],
             "batch_size": config["TRAIN"]["batch_size"],
@@ -378,25 +379,25 @@ if __name__ == "__main__":
         ignore_index=encoder_tokenizer.token_to_id("[PAD]"), label_smoothing=0.1
     ).to(device)
 
-    # Start = time.time()
+    Start = time.time()
 
-    # # -- Train the model
-    # train_model(
-    #     initial_epoch,
-    #     config["TRAIN"]["epochs"],
-    #     model,
-    #     optimizer,
-    #     train_dataloader,
-    #     loss_function,
-    #     device,
-    #     result_path,
-    #     encoder_tokenizer,
-    #     decoder_tokenizer,
-    #     max_seq_len= config["MODEL"]["source_sq_len"],
-    #     validation_loader=val_dataloader,
-    # )
+    # -- Train the model
+    train_model(
+        initial_epoch,
+        config["TRAIN"]["epochs"],
+        model,
+        optimizer,
+        train_dataloader,
+        loss_function,
+        device,
+        result_path,
+        encoder_tokenizer,
+        decoder_tokenizer,
+        max_seq_len= config["MODEL"]["source_sq_len"],
+        validation_loader=val_dataloader,
+    )
 
-    # End = time.time()
-    # Diff_hrs = (End - Start) / 3600
-    # print("***********      End of Training        **************")
-    # print("\n It took: {:.3f} hours".format(Diff_hrs))
+    End = time.time()
+    Diff_hrs = (End - Start) / 3600
+    print("***********      End of Training        **************")
+    print("\n It took: {:.3f} hours".format(Diff_hrs))
