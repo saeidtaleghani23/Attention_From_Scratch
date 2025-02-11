@@ -4,7 +4,7 @@ import torch  # type: ignore
 import torch.nn as nn  # type: ignore
 import os
 from sklearn.metrics import accuracy_score  # type: ignore
-from util import get_dataset, get_weights
+from util import get_dataset, get_weights, causal_mask
 import numpy as np  # type: ignore
 import wandb  # type: ignore
 import yaml
@@ -27,10 +27,9 @@ def greedy_decode(
 
         # build mask for target
         # Causal mask for the decoder (lower triangular matrix)
-        seq_len = decoder_input.size(1) # max_seq_len
-        causal_mask = torch.tril(torch.ones((seq_len, seq_len), diagonal=1)) # (seq_len, seq_len)
-        
-        decoder_mask = causal_mask.unsqueeze(0).type_as(encoder_mask).to(device)  # (1, seq_len, seq_len)
+         # encoder_input.size(1) # max_seq_len
+
+        decoder_mask = causal_mask(decoder_input.size(1)).type_as(encoder_mask).to(device) # (1, seq_len, seq_len)
         
         # calculate output
         out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask) # 
@@ -293,7 +292,9 @@ def train_model(
 
 if __name__ == "__main__":
     # Read the config file
-    with open("./config/config.yaml", "r") as file:
+    config_path = os.path.join(os.getcwd(), "config", "config.yml")
+
+    with open(config_path, "r") as file:
         config = yaml.safe_load(file)
 
     #

@@ -188,19 +188,7 @@ class Seq2SeqDataset(Dataset):
         encoder_mask = (encoder_input != self.pad_token).unsqueeze(
             0).unsqueeze(0).int()  # (1, 1, max_seq_len)
 
-        # Create decoder mask that 1 shows not padded token ids and 0 shows padded token ids
-        decoder_padding_mask = (decoder_input != self.pad_token).unsqueeze(
-            0).unsqueeze(0).int()  # (1, 1, max_seq_len)
-        
-        # Causal mask for the decoder (lower triangular matrix)
-        seq_len = decoder_input.size(0) # max_seq_len
-        causal_mask = torch.tril(torch.ones((seq_len, seq_len), diagonal=1)).type(
-            torch.int64)  # (max_seq_len, max_seq_len)
-        
-        causal_mask = causal_mask.unsqueeze(0)  # (1, max_seq_len, max_seq_len)
-        
-        # Combine padding mask and causal mask for the decoder
-        decoder_mask = (causal_mask & decoder_padding_mask) # (1, max_seq_len, max_seq_len)
+        decoder_mask = (decoder_input != self.pad_token).unsqueeze(0).int() & causal_mask(decoder_input.size(0))   
 
         return {
             "encoder_input": encoder_input, # token IDS (max_seq_len,)
@@ -212,6 +200,10 @@ class Seq2SeqDataset(Dataset):
             "target_text": target_text,
         }
 
+# define causal mask 
+def causal_mask(size):
+    mask = torch.triu(torch.ones((1, size, size)), diagonal=1).type(torch.int) 
+    return mask == 0
 # get saved model
 def get_weights(config, epoch: str):
     model_folder = config['BENCHMARK']['model_folder']
