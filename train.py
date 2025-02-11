@@ -61,7 +61,7 @@ def greedy_decode(
     return decoder_input.squeeze(0)
 
 
-def run_val_epoch(model,  val_loader,loss_function, device,encoder_tokenizer,  decoder_tokenizer,max_seq_len, results, epoch,prefix = 'val'):
+def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenizer, decoder_tokenizer, max_seq_len, results, epoch,prefix = 'val'):
 
     model= model.to(device)
     model.eval()
@@ -69,7 +69,7 @@ def run_val_epoch(model,  val_loader,loss_function, device,encoder_tokenizer,  d
     running_loss = []
     
     with torch.no_grad():
-        for batch in val_loader:
+        for batch in val_dataloader:
             encoder_input = batch["encoder_input"].to(device) # (1, seq_len)
             encoder_mask = batch["encoder_mask"].to(device) # (1, 1, 1, seq_len)
             label = batch["label"].to(device)  # (1, max_Seq_len)
@@ -123,13 +123,13 @@ def run_val_epoch(model,  val_loader,loss_function, device,encoder_tokenizer,  d
     return 
 
       
-def run_train_epoch(model,optimizer,data_loader,loss_function, device,results,score_functions,epoch):
+def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,results, encoder_tokenizer, epoch):
     
     model = model.to(device)
     model.train()
     running_loss = []
     running_accuracy = []
-    batch_iterator = tqdm(data_loader, desc=f"Processing epoch {epoch:02d}")
+    batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
     for batch in batch_iterator:
         encoder_input = batch["encoder_input"].to(device)  # (Batch, max_Seq_len)
         decoder_input = batch["decoder_input"].to(device)  # (Batch, max_Seq_len)
@@ -152,7 +152,7 @@ def run_train_epoch(model,optimizer,data_loader,loss_function, device,results,sc
         # Compute loss for each batch.
         # first  (Batch, Max_Seq_len, target_vocab_size) --> (Batch * Max_Seq_len, target_vocab_size)
         loss = loss_function(
-            projection_output.view(-1, target_tokenizer.get_vocab_size()),
+            projection_output.view(-1, encoder_tokenizer.get_vocab_size()),
             label.view(-1),
         )
 
@@ -171,7 +171,7 @@ def run_train_epoch(model,optimizer,data_loader,loss_function, device,results,sc
         # batch Accuracy
         predicted_tokens = torch.argmax(projection_output, dim=-1)  # Shape: (Batch, Max_Seq_len)
         # Mask Padding Tokens in Labels
-        pad_token_id = target_tokenizer.token_to_id("[PAD]")
+        pad_token_id = encoder_tokenizer.token_to_id("[PAD]")
         non_pad_mask = label != pad_token_id  # Shape: (Batch, Max_Seq_len)
         # Calculate Accuracy
         correct_predictions = (predicted_tokens == label) & non_pad_mask  # Shape: (Batch, Max_Seq_len)
@@ -193,14 +193,12 @@ def train_model(
     optimizer,
     train_loader,
     loss_function,
-    score_functions,
     device,
     result_path,
     encoder_tokenizer, 
     decoder_tokenizer,
     max_seq_len,
     validation_loader=None,
-    test_loader=None,
 ):
 
     # -- save all results
@@ -239,10 +237,8 @@ def train_model(
             loss_function,
             device,
             results,
-            score_functions,
+            encoder_tokenizer,
             epoch,
-            prefix="train",
-            desc="Training",
         )
 
         # -- Save epoch and processing time
@@ -259,8 +255,8 @@ def train_model(
                     decoder_tokenizer,
                     max_seq_len,
                     results,
-                    score_functions,
                     epoch,
+                    prefix = 'val'
                 )
             # save the model based on the validation loss
             if results["val loss"][-1] < Best_validation_loss:
@@ -300,16 +296,21 @@ if __name__ == "__main__":
     with open("./config/config.yaml", "r") as file:
         config = yaml.safe_load(file)
 
+    #
+    source_language = config["DATASET"]["source_lang"]
+    target_language = config["DATASET"]["target_lang"]
+    model_name = config["BENCHMARK"]["model_name"]
+
     # Initialize W&B
     # Authenticate with your API key
     wandb.login(key="4dd27c7624f2ab82554553d3e872b47dcaa05780")
     wandb.init(
-        project="translation",  # Name of your project
+        project=f"translation from {source_language} to {target_language}",  # Name of your project
         config={
             "learning_rate": config["TRAIN"]["lr"],
             "batch_size": config["TRAIN"]["batch_size"],
             "epochs": config["TRAIN"]["epochs"],
-            "model": "english_to_french",
+            "model": "Transformer",
         },
     )
 
@@ -318,25 +319,22 @@ if __name__ == "__main__":
     )
     os.makedirs(Result_Directory, exist_ok=True)
 
-    score_functions = {"Accuracy": accuracy_score}
-    # getting the dataloaders
+    # getting the dataloaders, and tokenizers
     (
         train_dataloader,
         val_dataloader,
         test_dataloader,
-        source_tokenizer,
-        target_tokenizer,
+        encoder_tokenizer,
+        decoder_tokenizer,
     ) = get_dataset(config)
+
     # get model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_transformer_model(config)
     # define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=config["TRAIN"]["lr"], eps=1e-9)
 
-    #
-    source_language = config["DATASET"]["source_lang"]
-    target_language = config["DATASET"]["target_lang"]
-    model_name = config["BENCHMARK"]["model_name"]
+    
 
     result_path = os.path.join(
         config["BENCHMARK"]["model_folder"],
@@ -358,7 +356,7 @@ if __name__ == "__main__":
         initial_epoch = checkpoint["epoch"] + 1
 
     loss_function = nn.CrossEntropyLoss(
-        ignore_index=source_tokenizer.token_to_id("[PAD]"), label_smoothing=0.1
+        ignore_index=encoder_tokenizer.token_to_id("[PAD]"), label_smoothing=0.1
     ).to(device)
 
     Start = time.time()
@@ -371,11 +369,12 @@ if __name__ == "__main__":
         optimizer,
         train_dataloader,
         loss_function,
-        score_functions,
         device,
         result_path,
+        encoder_tokenizer,
+        decoder_tokenizer,
+        max_seq_len= config["MODEL"]["source_sq_len"],
         validation_loader=val_dataloader,
-        test_loader=test_dataloader,
     )
 
     End = time.time()

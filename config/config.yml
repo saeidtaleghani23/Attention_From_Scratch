@@ -23,10 +23,10 @@ TRAIN:
   preload: False
 
 BENCHMARK:
-  model_name: 'translation'
-  model_folder: 'trained_model/weights'
+  model_name: 'Transformer'
+  model_folder: './trained_model/weights'
   preload: None
-  experiment_name: 'runs/translation_model'
+  experiment_name: './runs/translation_model'
   results_path: ./results
 
 
