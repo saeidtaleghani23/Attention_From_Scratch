@@ -35,6 +35,7 @@ class InputEmbedding(nn.Module):
         Returns:
             torch.Tensor: Embedded tokens. the size of the output is (max_seq_len, embed_size)
         """
+        print(f' input to self.embedding is of shape : {input_token.shape}')
         input_embed = self.embedding(
             input_token) * math.sqrt(self.embed_size)
         return input_embed
@@ -82,6 +83,10 @@ class PositionEncoding(nn.Module):
         Returns:
             torch.Tensor: Positional encoded input of the same shape. The output shape is (batch_size, seq_len, embedding_dim)
         """
+        print(f'input_embed_token.shape:{input_embed_token.shape}')
+        assert input_embed_token.size(1) <= self.position_encoding.size(1), \
+        f"Sequence length {input_embed_token.size(1)} exceeds position encoding length {self.position_encoding.size(1)}"
+
         x = input_embed_token + \
             (self.position_encoding[:, :input_embed_token.size(1), :]).requires_grad_(False)
                 
@@ -550,15 +555,15 @@ class Transformer(nn.Module):
         return self.projection_layer(x)
 
 
-def build_transformer_model(config) -> Transformer:
+def build_transformer_model(config, source_vocab_size, target_vocab_size) -> Transformer:
     """
     Function to build the transformer model
 
     Args:
         config (_type_): _description_
     """
-    source_vocab_size = config['MODEL']['source_vocab_size']
-    target_vocab_size = config['MODEL']['target_vocab_size']
+    #source_vocab_size = config['MODEL']['source_vocab_size']
+    #target_vocab_size = config['MODEL']['target_vocab_size']
     source_sq_len = config['MODEL']['source_sq_len']
     target_sqe_len = config['MODEL']['target_sqe_len']
     embedding_dim = config['MODEL']['embedding_dim']

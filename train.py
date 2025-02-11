@@ -331,7 +331,9 @@ if __name__ == "__main__":
 
     # get model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = build_transformer_model(config)
+    print(f'{device} device is being used')
+    print(f' source vocab size:{encoder_tokenizer.get_vocab_size()}\ntarget vocab size:{decoder_tokenizer.get_vocab_size()}')
+    model = build_transformer_model(config,  encoder_tokenizer.get_vocab_size(), decoder_tokenizer.get_vocab_size())
     # define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=config["TRAIN"]["lr"], eps=1e-9)
 
