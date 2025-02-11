@@ -333,18 +333,18 @@ if __name__ == "__main__":
 
     # save the test dataloader
     os.makedirs('./dataloaders', exist_ok=True)
-    file_path='./dataloaders/dataloader_components.pth'
+    file_path='./dataloaders/test_dataloader.pth'
     # Save the datasets
     torch.save({
-        'train_dataloader': train_dataloader,
-        'val_dataloader': val_dataloader,
-        'test_dataloader': test_dataloader,
-        'config': config
+        'test_dataset': test_dataloader.dataset,
     }, file_path)
-    # Load the saved dataloader components
-    checkpoint = torch.load(file_path)
-    test_dataloader = checkpoint['test_dataloader']
-
+    # # Load the saved dataloader components
+    # checkpoint = torch.load(file_path)
+    # # Extract the test_dataset
+    # test_dataset = checkpoint['test_dataset']
+    # # Recreate the test DataLoader with batch_size = 1 and shuffle = False
+    # test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+   
 
     # get model
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
