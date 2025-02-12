@@ -165,19 +165,29 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
     return 
 
       
-def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,results, encoder_tokenizer, epoch):
+def run_one_epoch(model,optimizer,dataloader,loss_function, device,results, encoder_tokenizer, epoch, prefix= 'train'):
     
     model = model.to(device)
-    model.train()
+    
     running_loss = []
     running_accuracy = []
-    batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
+    batch_iterator = tqdm(dataloader, desc=f" {prefix} Processing epoch {epoch:02d}")
     for batch in batch_iterator:
         encoder_input = batch["encoder_input"].to(device)  # (Batch, max_Seq_len)
         decoder_input = batch["decoder_input"].to(device)  # (Batch, max_Seq_len)
         encoder_mask = batch["encoder_mask"].to(device)  # (Batch, 1, 1, max_Seq_len)
         decoder_mask = batch["decoder_mask"].to(device)  # (Batch, 1, max_Seq_len, max_Seq_len)
         label = batch["label"].to(device)  # (Batch, max_Seq_len)
+        if prefix == 'train':
+            model.train()
+        elif prefix == 'val':
+            model.eval()
+            encoder_input.requires_grad_(False)
+            decoder_input.requires_grad_(False)
+            encoder_mask.requires_grad_(False)
+            decoder_mask.requires_grad_(False)
+            label.requires_grad_(False)
+
         # Output of the model
         # (Batch, Max_Seq_len, embedding_dim)
         encoder_output = model.encode(encoder_input, encoder_mask)
@@ -195,18 +205,17 @@ def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,resul
             projection_output.view(-1, encoder_tokenizer.get_vocab_size()),
             label.view(-1),
         )
-
+        # batch loss value
+        running_loss.append(loss.item())
 
         # Show the lost on the progress bar
         batch_iterator.set_postfix({"loss": f"{loss.item():6.3f}"})
 
         # Back propagation
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad(set_to_none=True)
-
-        # batch loss value
-        running_loss.append(loss.item())
+        if  prefix == 'train':
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad(set_to_none=True)
 
         # batch Accuracy
         predicted_tokens = torch.argmax(projection_output, dim=-1)  # Shape: (Batch, Max_Seq_len)
@@ -220,14 +229,14 @@ def run_train_epoch(model,optimizer,train_dataloader,loss_function, device,resul
 
     
     # Calculate average loss and accuracy for a epoch
-    avg_loss = np.mean(running_loss)
-    avg_accuracy = np.mean(running_accuracy)
+    epoch_loss = np.mean(running_loss)
+    epoch_accuracy = np.mean(running_accuracy)
 
-    results["train loss"].append(avg_loss)
-    results["train accuracy"].append(avg_accuracy)
+    results[prefix + " loss"].append(epoch_loss)
+    results[prefix + " accuracy"].append(epoch_accuracy)
 
     # log the loss value
-    wandb.log({"Train loss": np.mean(running_loss), "epoch": epoch})
+    wandb.log({f"{prefix} loss": epoch_loss, "epoch": epoch})
 
 
 def train_model(
@@ -274,7 +283,7 @@ def train_model(
         # -- set the model on train
         model.train()
         # -- Train for one epoch
-        run_train_epoch(
+        run_one_epoch(
             model,
             optimizer,
             train_loader,
@@ -283,6 +292,7 @@ def train_model(
             results,
             encoder_tokenizer,
             epoch,
+            prefix = 'train'
         )
 
         # -- Save epoch and processing time
@@ -290,22 +300,21 @@ def train_model(
 
         #   ******  Validating  ******
         if validation_loader is not None:
-            run_val_epoch(
+            run_one_epoch(
                     model,
+                    optimizer,
                     validation_loader,
                     loss_function,
                     device,
-                    encoder_tokenizer,
-                    decoder_tokenizer,
-                    max_seq_len,
                     results,
+                    encoder_tokenizer,
                     epoch,
                     prefix = 'val'
                 )
             # save the model based on the validation loss
             if results['val loss'][-1] < Best_validation_loss:
                 print(
-                    "\nEpoch: {}   train loss: {:.2f}   train accuracy: {:.2f} val loss: {:.2f}   val accuracy: {:.2f}".format(
+                    "\nEpoch: {}   train loss: {:.4f}   train accuracy: {:.2f} val loss: {:.4f}   val accuracy: {:.2f}".format(
                         epoch,
                         results['train loss'][-1],
                         results['train accuracy'][-1],
