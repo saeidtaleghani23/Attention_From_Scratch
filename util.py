@@ -131,27 +131,25 @@ def get_dataset(config):
     train_dataloader = DataLoader(
         train_dataset, batch_size=config['TRAIN']['batch_size'], shuffle=True, drop_last=True)
 
-    num_train_samples = 100  # Specify the number of samples you want in the subset
+    # num_train_samples = 100  # Specify the number of samples you want in the subset
 
-    # Ensure num_samples is not greater than the length of the dataset
-    num_train_samples = min(num_train_samples, len(train_dataset))
+    # # Ensure num_samples is not greater than the length of the dataset
+    # num_train_samples = min(num_train_samples, len(train_dataset))
 
-    # Create a subset of the train dataset with num_samples indices
-    subset_train_dataset = Subset(train_dataset, list(range(num_train_samples)))
+    # # Create a subset of the train dataset with num_samples indices
+    # subset_train_dataset = Subset(train_dataset, list(range(num_train_samples)))
 
-    # Create a new train DataLoader with subset_train_dataset
-    train_dataloader = DataLoader(subset_train_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False)
+    # # Create a new train DataLoader with subset_train_dataset
+    # train_dataloader = DataLoader(subset_train_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False)
+
+
 
     val_dataloader = DataLoader(val_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False, drop_last=True)
     # Ensure num_samples is not greater than the length of the dataset
-    num_val_samples = 800
-    num_val_samples = min(num_val_samples, len(val_dataset))
-
-    # Create a subset of the train dataset with num_samples indices
-    subset_val_dataset = Subset(train_dataset, list(range(num_val_samples)))
-
-    # Create a new train DataLoader with subset_train_dataset
-    val_dataloader = DataLoader(subset_val_dataset, batch_size=1, shuffle=False)
+    # num_val_samples = 1000
+    # num_val_samples = min(num_val_samples, len(val_dataset))
+    # subset_val_dataset = Subset(val_dataset, list(range(num_val_samples)))
+    # val_dataloader = DataLoader(subset_val_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False, drop_last=True)
 
 
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
