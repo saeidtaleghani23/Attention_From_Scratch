@@ -100,6 +100,12 @@ def get_dataset(config):
     train_dataset_size = int(0.8*len(dataset))
     val_dataset_size = int((len(dataset) - train_dataset_size) // 2)
     test_dataset_size = len(dataset) - train_dataset_size - val_dataset_size
+    print(f'train_dataset_size:{train_dataset_size}')
+    print(f'val_dataset_size:{val_dataset_size}')
+    print(f'test_dataset_size:{test_dataset_size}')
+    print(f'train_dataset_size + val_dataset_size + test_dataset_size= {train_dataset_size + val_dataset_size + test_dataset_size}')
+    print(f'len(dataset): {len(dataset)}')
+
     # for debug the code
     
     train_dataset, val_dataset, test_dataset = random_split(

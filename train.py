@@ -82,7 +82,7 @@ def batched_greedy_decode(
     # Store the decoded outputs for all sequences
     decoded_tokens = torch.full((batch_size, max_len), tokenizer_tgt.token_to_id("[PAD]"), dtype=torch.long).to(device)
     decoded_tokens[:, 0] = sos_idx  # First token is always SOS
-    for i in tqdm(range(1, max_len), desc= 'batched_greedy_decode'):
+    for i in range(1, max_len):
         decoder_mask = causal_mask(i).type_as(encoder_mask).to(device)  # (1, i, i)
         out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
         prob = model.projection(out[:, -1])  # Get the last time step output
@@ -107,9 +107,8 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
     model.eval()
     running_accuracy = []
     running_loss = []
-    batch_iterator = tqdm(train_dataloader, desc=f"Validation Processing epoch {epoch:02d}")
     with torch.no_grad():
-        for batch in val_dataloader:
+        for batch in  tqdm(val_dataloader, desc= 'Validation Processing epoch {epoch:02d}'):
             encoder_input = batch["encoder_input"].to(device) # (1, seq_len)
             encoder_mask = batch["encoder_mask"].to(device) # (1, 1, 1, seq_len)
             label = batch["label"].to(device)  # (1, max_Seq_len)
