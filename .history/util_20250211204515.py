@@ -140,9 +140,9 @@ def get_dataset(config):
     subset_train_dataset = Subset(train_dataset, list(range(num_train_samples)))
 
     # Create a new train DataLoader with subset_train_dataset
-    train_dataloader = DataLoader(subset_train_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False)
+    train_dataloader = DataLoader(subset_train_dataset, batch_size=config['TRAIN']['batch_size'], shuffle=False)
 
-    val_dataloader = DataLoader(val_dataset, batch_size= config['TRAIN']['batch_size'], shuffle=False, drop_last=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
     # Ensure num_samples is not greater than the length of the dataset
     num_val_samples = 800
     num_val_samples = min(num_val_samples, len(val_dataset))

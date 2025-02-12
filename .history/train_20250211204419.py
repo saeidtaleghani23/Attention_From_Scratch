@@ -120,9 +120,8 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
                 0) == 1, "Batch size must be 1 for validation"
             # Use greedy decoding to generate the predicted sequences token IDs  batched_greedy_decode
             #predicted_tokens = greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-            #predicted_tokens= predicted_tokens.unsqueeze(0)
             predicted_tokens = batched_greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-            
+            predicted_tokens= predicted_tokens.unsqueeze(0)
             # Calculate loss for each batch (like in the training phase)
             encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
             decoder_output = model.decode(encoder_output, encoder_mask, predicted_tokens, decoder_mask )  # Use predicted tokens as decoder input

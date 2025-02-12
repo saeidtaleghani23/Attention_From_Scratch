@@ -1,11 +1,11 @@
 MODEL:
   source_sq_len: 500
   target_sqe_len: 500
-  embedding_dim: 256 #512
-  num_heads: 8
-  num_layers: 6
+  embedding_dim: 10 #256 #512
+  num_heads: 2 #8
+  num_layers: 2 #6
   dropout: 0.1
-  ff_hidden_size: 1024 #2048
+  ff_hidden_size: 40 #1024 #2048
 
 DATASET:
   dataset_path: './dataset'

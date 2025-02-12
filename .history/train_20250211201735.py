@@ -60,47 +60,6 @@ def greedy_decode(
     return decoder_input.squeeze(0)
 
 
-def batched_greedy_decode(
-    model, encoder_input, encoder_mask, tokenizer_src, tokenizer_tgt, max_len, device
-):
-    sos_idx = tokenizer_tgt.token_to_id("[SOS]")
-    eos_idx = tokenizer_tgt.token_to_id("[EOS]")
-    batch_size = encoder_input.size(0)
-    print('*'*40)
-    print('batched_greedy_decode function')
-    print(f'encoder_input.shape:{encoder_input.shape}')
-    print(f'encoder_mask.shape:{encoder_mask.shape}')
-    # Precompute the encoder output for all sequences in the batch
-    encoder_output = model.encode(encoder_input, encoder_mask)
-
-    print(f'encoder_output.shape:{encoder_output.shape}')
-
-    # Initialize the decoder input with sos tokens for the entire batch
-    decoder_input = torch.full((batch_size, 1), sos_idx, dtype=torch.long).to(device)
-
-    # Store the decoded outputs for all sequences
-    decoded_tokens = torch.full((batch_size, max_len), tokenizer_tgt.token_to_id("[PAD]"), dtype=torch.long).to(device)
-    decoded_tokens[:, 0] = sos_idx  # First token is always SOS
-
-    for i in range(1, max_len):
-        decoder_mask = causal_mask(i).type_as(encoder_mask).to(device)  # (1, i, i)
-        out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
-        prob = model.projection(out[:, -1])  # Get the last time step output
-        next_word = torch.argmax(prob, dim=1)  # (batch_size,)
-        
-        decoder_input = torch.cat(
-            [decoder_input, next_word.unsqueeze(1)], dim=1
-        )  # Append the next predicted word to the decoder input
-        
-        decoded_tokens[:, i] = next_word
-
-        # Stop decoding if all sequences in the batch reach the EOS token
-        if (next_word == eos_idx).all():
-            break
-
-    return decoded_tokens
-
-
 def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenizer, decoder_tokenizer, max_seq_len, results, epoch,prefix = 'val'):
 
     model= model.to(device)
@@ -118,11 +77,9 @@ def run_val_epoch(model,  val_dataloader,loss_function, device, encoder_tokenize
             # check that the batch size is 1
             assert encoder_input.size(
                 0) == 1, "Batch size must be 1 for validation"
-            # Use greedy decoding to generate the predicted sequences token IDs  batched_greedy_decode
-            #predicted_tokens = greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-            #predicted_tokens= predicted_tokens.unsqueeze(0)
-            predicted_tokens = batched_greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
-            
+            # Use greedy decoding to generate the predicted sequences token IDs
+            predicted_tokens = greedy_decode(model, encoder_input, encoder_mask, encoder_tokenizer, decoder_tokenizer, max_seq_len, device)
+            predicted_tokens= predicted_tokens.unsqueeze(0)
             # Calculate loss for each batch (like in the training phase)
             encoder_output = model.encode(encoder_input, encoder_mask)  # (1, max_Seq_len, embedding_dim)
             decoder_output = model.decode(encoder_output, encoder_mask, predicted_tokens, decoder_mask )  # Use predicted tokens as decoder input
