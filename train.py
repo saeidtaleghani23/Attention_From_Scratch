@@ -314,12 +314,12 @@ def train_model(
             # save the model based on the validation loss
             if results['val loss'][-1] < Best_validation_loss:
                 print(
-                    "\nEpoch: {}   train loss: {:.4f}   train accuracy: {:.2f} val loss: {:.4f}   val accuracy: {:.2f}".format(
+                    "\nEpoch: {}   train loss: {:.4f}   train accuracy: {:.2f}% val loss: {:.4f}   val accuracy: {:.2f}%".format(
                         epoch,
                         results['train loss'][-1],
-                        results['train accuracy'][-1],
+                        results['train accuracy'][-1]*100,
                         results['val loss'][-1],
-                        results['val accuracy'][-1],
+                        results['val accuracy'][-1]*100,
                     )
                 )
                 Best_validation_loss = results["val loss"][-1]
