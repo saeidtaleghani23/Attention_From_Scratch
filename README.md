@@ -79,6 +79,7 @@ Docker allows you to run the application in a containerized environment, ensurin
     This will create a Docker image named ``flask-translator``.
 
 3. **Run the Docker Container**
+    
     Once the image is built, run the Docker container with the following command:
     ```bash
     docker run -p 5000:5000 flask-translator
