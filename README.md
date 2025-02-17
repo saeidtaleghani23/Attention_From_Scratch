@@ -38,9 +38,9 @@ conda env create -f ./env/environment.yml
 conda activate transformer_env
 python train.py
 ```
-
+3. Then, you can test your trained model and see some example sentences and their translation.
 ```bash
-pyhton test_model.py
+python test_model.py
 ```
 
 ## 📖 References
