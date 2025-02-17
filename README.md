@@ -71,6 +71,7 @@ Docker allows you to run the application in a containerized environment, ensurin
    ```
 
 2. **Build the Docker Image**
+    
     In the root directory of the project (where the Dockerfile is located), build the Docker image by running the following command:
     ```bash
     docker build -t flask-translator .
