@@ -36,8 +36,11 @@ git clone https://github.com/saeidtaleghani23/Attention_From_Scratch.git
 cd Attention_From_Scratch
 conda env create -f ./env/environment.yml
 conda activate transformer_env
-python train.py --dataset your_dataset
+python train.py
+```
 
+```bash
+pyhton test.py
 ```
 
 ## 📖 References

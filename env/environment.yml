@@ -17,3 +17,4 @@ dependencies:   # List of dependencies
   - pip:     # List of pip packages
     - transformers
     - tokenizers
+    - torchvision
