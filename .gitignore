@@ -7,8 +7,11 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-wandb/
+# Ignore dataloaders, wandb, and trained_model directories
 dataloaders/
+wandb/
+trained_model/
+
 results/
 trained_model/
 .Python
