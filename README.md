@@ -87,6 +87,7 @@ Docker allows you to run the application in a containerized environment, ensurin
     This command maps port 5000 on your local machine to port 5000 in the Docker container, where the Flask application will be accessible.
 
 4. **Access the Application**
+    
     Open your browser and go to ``http://localhost:5000`` to interact with the translation app.
     You can input a sentence for translation and see the translated output.
 
