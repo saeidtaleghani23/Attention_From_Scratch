@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Translation API</title>
+</head>
+<body>
+    <h1>English to French Translation</h1>
+
+    <form action="/translate" method="POST">
+        <label for="sentence">Enter English sentence:</label>
+        <textarea name="sentence" rows="4" cols="50" required></textarea><br><br>
+
+        <button type="submit">Translate</button>
+    </form>
+
+    {% if original %}
+        <h2>Original Sentence:</h2>
+        <p>{{ original }}</p>
+
+        <h2>Translated Sentence:</h2>
+        <p>{{ translated }}</p>
+    {% endif %}
+</body>
+</html>

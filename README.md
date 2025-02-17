@@ -40,7 +40,7 @@ python train.py
 ```
 
 ```bash
-pyhton test.py
+pyhton test_model.py
 ```
 
 ## 📖 References

@@ -84,42 +84,6 @@ def greedy_decode(
 
     return decoder_input.squeeze(0)
 
-
-def batched_greedy_decode(
-    model, encoder_input, encoder_mask, tokenizer_src, tokenizer_tgt, max_len, device
-):
-    sos_idx = tokenizer_tgt.token_to_id("[SOS]")
-    eos_idx = tokenizer_tgt.token_to_id("[EOS]")
-    batch_size = encoder_input.size(0)
-    # Precompute the encoder output for all sequences in the batch
-    encoder_output = model.encode(encoder_input, encoder_mask)
-
-    # print(f'encoder_output.shape:{encoder_output.shape}')
-
-    # Initialize the decoder input with sos tokens for the entire batch
-    decoder_input = torch.full((batch_size, 1), sos_idx, dtype=torch.long).to(device)
-
-    # Store the decoded outputs for all sequences
-    decoded_tokens = torch.full((batch_size, max_len), tokenizer_tgt.token_to_id("[PAD]"), dtype=torch.long).to(device)
-    decoded_tokens[:, 0] = sos_idx  # First token is always SOS
-    for i in range(1, max_len):
-        decoder_mask = causal_mask(i).type_as(encoder_mask).to(device)  # (1, i, i)
-        out = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
-        prob = model.projection(out[:, -1])  # Get the last time step output
-        next_word = torch.argmax(prob, dim=1)  # (batch_size,)
-        
-        decoder_input = torch.cat(
-            [decoder_input, next_word.unsqueeze(1)], dim=1
-        )  # Append the next predicted word to the decoder input
-        
-        decoded_tokens[:, i] = next_word
-
-        # Stop decoding if all sequences in the batch reach the EOS token
-        if (next_word == eos_idx).all():
-            break
-
-    return decoded_tokens
-
 def test(model, test_dataloader, device, encoder_tokenizer, decoder_tokenizer, max_seq_len, prefix = 'test', print_samples = 10):
     # random samples
     random_samples_idx = np.random.randint(0, len(test_dataloader), print_samples).tolist()
