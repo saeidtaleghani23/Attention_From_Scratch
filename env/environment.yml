@@ -18,3 +18,4 @@ dependencies:   # List of dependencies
     - transformers
     - tokenizers
     - torchvision
+    - flask
