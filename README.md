@@ -47,3 +47,44 @@ pyhton test_model.py
 - [Attention Is All You Need](https://arxiv.org/abs/1706.03762)  
 - [PyTorch Documentation](https://pytorch.org/docs/stable/index.html)
 
+---
+# Language Translation Web Application
+
+This part is a Flask-based language translation application that utilizes a pre-trained transformer model for translation. 
+The application takes an English sentence as input and returns the translated French sentence.
+
+## Running the Application with Docker
+Docker allows you to run the application in a containerized environment, ensuring it runs seamlessly across different systems.
+
+### Prerequisites
+
+- **Docker**: You need Docker installed on your machine to build and run the container. Follow the instructions on the official Docker [installation guide](https://docs.docker.com/get-docker/) if you haven't already installed Docker.
+
+### Steps to Run the Application
+1. **Clone the Repository**
+
+   If you haven’t cloned the repository yet, do so by running:
+
+   ```bash
+   git clone https://github.com/saeidtaleghani23/Attention_From_Scratch.git
+   cd Attention_From_Scratch
+   ```
+
+2. **Clone the Repository**
+    In the root directory of the project (where the Dockerfile is located), build the Docker image by running the following command:
+    ```bash
+    docker build -t flask-translator .
+    ```
+    This will create a Docker image named ``flask-translator``.
+
+3. **Run the Docker Container**
+    Once the image is built, run the Docker container with the following command:
+    ```bash
+    docker run -p 5000:5000 flask-translator
+    ```
+    This command maps port 5000 on your local machine to port 5000 in the Docker container, where the Flask application will be accessible.
+
+4. **Access the Application**
+    Open your browser and go to ``http://localhost:5000`` to interact with the translation app.
+    You can input a sentence for translation and see the translated output.
+
