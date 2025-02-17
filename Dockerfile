@@ -13,6 +13,9 @@ RUN conda env create -f /app/env/environment.yml
 # Activate the environment and install any additional dependencies if needed
 RUN echo "conda activate transformer_env" >> ~/.bashrc
 
+# Ensure the Conda environment is activated correctly
+SHELL ["/bin/bash", "--login", "-c"]
+
 # Copy the rest of the code into the container
 COPY . /app
 
@@ -24,4 +27,5 @@ ENV FLASK_RUN_HOST=0.0.0.0
 EXPOSE 5000
 
 # Run the Flask application inside the Conda environment
-CMD ["conda", "run", "--no-capture-output", "-n", "transformer_env", "flask", "run"]
+#CMD ["conda", "run", "--no-capture-output", "-n", "transformer_env", "flask", "run"]
+CMD ["bash", "-c", "source activate transformer_env && flask run --host=0.0.0.0"]

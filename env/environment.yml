@@ -5,7 +5,7 @@ channels:         # List of channels to search for packages
 dependencies:   # List of dependencies
   - pytorch
   - tensorflow
-  - numpy
+  - numpy>=1.20 
   - pandas
   - scikit-learn
   - matplotlib
@@ -19,3 +19,4 @@ dependencies:   # List of dependencies
     - tokenizers
     - torchvision
     - flask
+    - torchmetrics
